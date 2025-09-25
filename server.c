@@ -1,6 +1,5 @@
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <acl/libacl.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -9,11 +8,19 @@
 #include <signal.h>
 #include <pthread.h>
 #include <fcntl.h>
+#include <stdbool.h>
 
 #define LISTENQ (8)
-#define BUF_SIZE (128)
+#define BUF_SIZE (256)
 #define NAME_SIZE (64)
 #define NUMBER_SIZE (32)
+#define USR_SIZE (64)
+#define PWD_SIZE (64)
+
+typedef struct {
+	char usr[USR_SIZE];
+	char pwd[PWD_SIZE];
+} User;
 
 typedef struct {
 	char name[NAME_SIZE];
@@ -25,7 +32,8 @@ pthread_mutex_t fmutex;
 void *clientThread(void *arg);
 
 int parseCmdLine(int argc, char *argv[], char **sPort);
-int checkPermission(char *filename, uid_t uid, int perm);
+int login(User *utente);
+bool checkPermission(char *filename, char *username, char *perm);
 
 Contact *getContact(int sock);
 void addContact(char *filename, Contact *contatto);
@@ -95,33 +103,22 @@ int main(int argc, char *argv[]){
 	}
 }
 
-int parseCmdLine(int argc, char *argv[], char **sPort){
-	// funzione per argomenti corretti, acquisizione della porta su cui il server si mette in ascolto
-	if (argc == 1){
-		printf("Usage: %s -p (port) [-h]\n", argv[0]);
-		exit(EXIT_SUCCESS);
-	}
-	
-	for (int i = 1; i < argc; i++){
-		if (!strncmp(argv[i], "-p", 2) || !strncmp(argv[i], "-P", 2)){
-			*sPort = argv[i+1];
-		} else if (!strncmp(argv[i], "-h", 2) || !strncmp(argv[i], "-H", 2)){
-			printf("Usage: %s -p (port) [-h]\n", argv[0]);
-			exit(EXIT_SUCCESS);
-		}
-	}
-	
-	return 0;
-}
-
 void *clientThread(void *arg){
 	int c_sock = *((int *)arg);
 	free(arg); // evita memory leak
-	int choice, answer;
+	int choice, res;
+	bool answer;
 	
-	// acquisizone uid del client
-	uid_t c_uid;
-	recv(c_sock, &c_uid, sizeof(c_uid), 0);
+	// login del client
+	User *c_user = malloc(sizeof(User));
+	recv(c_sock, c_user->usr, USR_SIZE, 0); // client manda username
+	recv(c_sock, c_user->pwd, PWD_SIZE, 0); // client manda password
+	while ( (res = login(c_user)) != 0){
+		// login non andato a buon fine, ritenta
+		send(c_sock, &res, sizeof(res), 0); // manda codice di errore al client
+		recv(c_sock, c_user->usr, USR_SIZE, 0);
+		recv(c_sock, c_user->pwd, PWD_SIZE, 0);
+	}
 	
 	// acquisizione scelta del client
 	recv(c_sock, &choice, sizeof(choice), 0);
@@ -129,8 +126,8 @@ void *clientThread(void *arg){
 		switch(choice){
 			case 1:
 				// check permessi
-				answer = checkPermission("rubrica", c_uid, ACL_WRITE);
-				send(c_sock, &answer, sizeof(answer), 0);
+				answer = checkPermission("permissions", c_user->usr, "w");
+				send(c_sock, &answer, sizeof(answer), 0); // invia risultato al client
 				if (answer){
 					// accesso consentito
 					Contact *contatto = getContact(c_sock);
@@ -144,8 +141,8 @@ void *clientThread(void *arg){
 				break;
 			case 2:
 				// check permessi
-				answer = checkPermission("rubrica", c_uid, ACL_READ);
-				send(c_sock, &answer, sizeof(answer), 0);
+				answer = checkPermission("permissions", c_user->usr, "r");
+				send(c_sock, &answer, sizeof(answer), 0); // invia risultato al client
 				if (answer){
 					// accesso consentito
 					Contact *contatto = getContact(c_sock);
@@ -175,39 +172,91 @@ void *clientThread(void *arg){
 	}
 	
 	close(c_sock);
+	free(c_user);
 	pthread_exit(NULL);
 }
 
-int checkPermission(char *filename, uid_t uid, int perm) {
-	// funzione per il controllo dei permessi ACL r/w sulla rubrica dell'utente (client) specifico
-    acl_t acl = acl_get_file(filename, ACL_TYPE_ACCESS);
-    if (acl == NULL) {
-        perror("acl_get_file");
-        return 0;
-    }
+int parseCmdLine(int argc, char *argv[], char **sPort){
+	// funzione per argomenti corretti, acquisizione della porta su cui il server si mette in ascolto
+	if (argc == 1){
+		printf("Usage: %s -p (port) [-h]\n", argv[0]);
+		exit(EXIT_SUCCESS);
+	}
+	
+	for (int i = 1; i < argc; i++){
+		if (!strncmp(argv[i], "-p", 2) || !strncmp(argv[i], "-P", 2)){
+			*sPort = argv[i+1];
+		} else if (!strncmp(argv[i], "-h", 2) || !strncmp(argv[i], "-H", 2)){
+			printf("Usage: %s -p (port) [-h]\n", argv[0]);
+			exit(EXIT_SUCCESS);
+		}
+	}
+	
+	return 0;
+}
 
-    acl_entry_t entry;
-    int entry_id = ACL_FIRST_ENTRY;
-    while (acl_get_entry(acl, entry_id, &entry) == 1) {
-        entry_id = ACL_NEXT_ENTRY;
-        acl_tag_t tag;
-        acl_get_tag_type(entry, &tag);
+int login(User *utente){
+	// ogni riga di users è "username password\n"
+	int fd = open("users", O_RDONLY);
+	char buffer[BUF_SIZE];
+	
+	int i = 0;
+	char c;
+	while (read(fd, &c, 1) == 1){
+		// leggo un carattere alla volta
+		buffer[i++] = c;
+		if (c == '\n'){
+			// ho letto una riga: "username password\n"
+			buffer[i] = '\0'; // controllare
+			char *username = strtok(buffer, " \n");
+			char *password = strtok(NULL, " \n");
+			if (strcmp(username, utente->usr) == 0 && strcmp(password, utente->pwd) == 0){
+				close(fd);
+				return 0; // utente riconosciuto
+			} else if (strcmp(username, utente->usr) == 0 && strcmp(password, utente->pwd) != 0){
+				close(fd);
+				return 1; // password sbagliata
+			}
+			
+			memset(buffer, 0, BUF_SIZE);
+			i = 0;
+		}
+	}
+	
+	close(fd);
+	return 2; // utente non presente
+}
 
-        if (tag == ACL_USER) {
-            uid_t *entry_uid = (uid_t *)acl_get_qualifier(entry);
-            if (*entry_uid == uid) {
-                acl_permset_t permset;
-                acl_get_permset(entry, &permset);
-                int has_perm = acl_get_perm(permset, perm);
-                acl_free(entry_uid);
-                acl_free(acl);
-                return has_perm;
-            }
-            acl_free(entry_uid);
-        }
-    }
-    acl_free(acl);
-    return 0; // Nessuna entry trovata per quell'UID
+bool checkPermission(char *filename, char *username, char *perm){
+	// ogni riga di permission è "username permission\n"
+	int fd = open(filename, O_RDONLY);
+	char buffer[BUF_SIZE];
+	
+	int i = 0;
+	char c;
+	while (read(fd, &c, 1) == 1){
+		buffer[i++] = c;
+		if (c == '\n'){
+			buffer[i] = '\0';
+			char *buffer_username = strtok(buffer, " \n");
+			char *buffer_perm = strtok(NULL, " \n");
+			if (strcmp(username, buffer_username) == 0) {
+				if (strstr(buffer_perm, perm) != NULL || strcmp(buffer_perm, "rw") == 0) {
+					close(fd);
+					return true;
+				} else {
+					close(fd);
+					return false;
+			    	}
+			}
+			
+			memset(buffer, 0, BUF_SIZE);
+			i = 0;
+		}
+	}
+	
+	close(fd);
+	return false;
 }
 
 Contact *getContact(int sock){
@@ -298,6 +347,3 @@ void searchContact(char *filename, Contact *contatto){
 	contatto->number[0] = '\0'; // contatto non trovato
 	close(fd);
 }
-
-
-
