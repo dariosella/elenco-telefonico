@@ -10,12 +10,7 @@
 #include <fcntl.h>
 #include <stdbool.h>
 
-#define LISTENQ (8)
-#define BUF_SIZE (256)
-#define NAME_SIZE (64)
-#define NUMBER_SIZE (32)
-#define USR_SIZE (64)
-#define PWD_SIZE (64)
+#include "header.h"
 
 typedef struct {
 	char usr[USR_SIZE];
@@ -36,8 +31,8 @@ int login(User *utente);
 bool checkPermission(char *filename, char *username, char *perm);
 
 Contact *getContact(int sock);
-void addContact(char *filename, Contact *contatto);
-void searchContact(char *filename, Contact *contatto);
+int addContact(char *filename, Contact *contatto);
+int searchContact(char *filename, Contact *contatto);
 
 int main(int argc, char *argv[]){
 	pthread_mutex_init(&fmutex, NULL); // inizializza mutex per lettura/scrittura su rubrica
@@ -119,6 +114,7 @@ void *clientThread(void *arg){
 		recv(c_sock, c_user->usr, USR_SIZE, 0);
 		recv(c_sock, c_user->pwd, PWD_SIZE, 0);
 	}
+	send(c_sock, &res, sizeof(res), 0); // manda codice di successo al client
 	
 	// acquisizione scelta del client
 	recv(c_sock, &choice, sizeof(choice), 0);
@@ -130,12 +126,24 @@ void *clientThread(void *arg){
 				send(c_sock, &answer, sizeof(answer), 0); // invia risultato al client
 				if (answer){
 					// accesso consentito
-					Contact *contatto = getContact(c_sock);
+					Contact *contatto = getContact(c_sock); // client invia il contatto
 					
 					pthread_mutex_lock(&fmutex);
-					addContact("rubrica", contatto);
+					int res = addContact("rubrica", contatto); // aggiungo il contatto in rubrica
 					pthread_mutex_unlock(&fmutex);
 					
+					switch (res){
+						case 0:
+							// contatto aggiunto
+							char *succ = "Contatto aggiunto\n";
+							send(c_sock, succ, strlen(succ) + 1, 0);
+							break;
+						default:
+							// errore
+							char *err = "Errore\n";
+							send(c_sock, err, strlen(err) + 1, 0);
+							break;
+					}
 					free(contatto); // evita memory leak
 				}
 				break;
@@ -145,28 +153,33 @@ void *clientThread(void *arg){
 				send(c_sock, &answer, sizeof(answer), 0); // invia risultato al client
 				if (answer){
 					// accesso consentito
-					Contact *contatto = getContact(c_sock);
+					Contact *contatto = getContact(c_sock); // client invia il contatto
 					
 					pthread_mutex_lock(&fmutex);
-					searchContact("rubrica", contatto);
+					int res = searchContact("rubrica", contatto); // cerca il contatto in rubrica
 					pthread_mutex_unlock(&fmutex);
 					
-					if (contatto->number[0] != '\0'){
-						// contatto trovato
-						char buffer[BUF_SIZE];
-						snprintf(buffer, BUF_SIZE, "%s%s\n", contatto->name, contatto->number);
-						send(c_sock, buffer, strlen(buffer), 0);
-					} else {
-						// contatto non trovato
-						char *buffer = "contatto non trovato";
-						send(c_sock, buffer, strlen(buffer), 0);
+					switch (res){
+						case 0:
+							// contatto trovato
+							char buffer[BUF_SIZE];
+							snprintf(buffer, BUF_SIZE, "%s%s\n", contatto->name, contatto->number);
+							send(c_sock, buffer, strlen(buffer), 0); // invia contatto e numero al client
+							break;
+						case 1:
+							// contatto non trovato
+							char *not = "Contatto non trovato\n";
+							send(c_sock, not, strlen(not) + 1, 0);
+							break;
+						default:
+							// errore
+							char *err = "Errore\n";
+							send(c_sock, err, strlen(err) + 1, 0);
+							break;
 					}
-					
 					free(contatto); // evita memory leak
 				}
 				break;
-			default:
-				puts("Invalid choice");
 		}
 		recv(c_sock, &choice, sizeof(choice), 0);
 	}
@@ -289,12 +302,12 @@ Contact *getContact(int sock){
 	return contatto;
 }
 
-void addContact(char *filename, Contact *contatto){
+int addContact(char *filename, Contact *contatto){
 	// funzione per l'aggiunta di un nuovo contatto alla fine della rubrica
 	int fd = open(filename, O_CREAT | O_WRONLY | O_APPEND, 0600);
 	if (fd == -1){
 		perror("open");
-		exit(EXIT_FAILURE);
+		return -1;
 	}
 	
 	char buffer[BUF_SIZE];
@@ -302,11 +315,17 @@ void addContact(char *filename, Contact *contatto){
 	write(fd, buffer, strlen(buffer));
 	
 	close(fd);
+	return 0;
 }
 
-void searchContact(char *filename, Contact *contatto){
+int searchContact(char *filename, Contact *contatto){
 	// funzione per la ricerca di un contatto in rubrica
 	int fd = open(filename, O_RDONLY);
+	if (fd == -1){
+		perror("open");
+		return -1;
+	}
+	
 	char name[NAME_SIZE];
 	char filelen[BUF_SIZE];
 	
@@ -334,7 +353,7 @@ void searchContact(char *filename, Contact *contatto){
 						// il token è il numero di telefono, corrispondenza trovata
 						strcpy(contatto->number, token);
 						close(fd);
-						return;	
+						return 0;
 					}
 				}
 			}
@@ -346,4 +365,5 @@ void searchContact(char *filename, Contact *contatto){
 	
 	contatto->number[0] = '\0'; // contatto non trovato
 	close(fd);
+	return 1;
 }
