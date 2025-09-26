@@ -105,14 +105,14 @@ void *clientThread(void *arg){
 	// login del client
 	int res, net_res;
 	User *c_user = malloc(sizeof(User));
-	recv(c_sock, c_user->usr, USR_SIZE, 0); // client manda username
-	recv(c_sock, c_user->pwd, PWD_SIZE, 0); // client manda password
+	handle(recv(c_sock, c_user->usr, USR_SIZE, 0), c_sock, SERVER); // client manda username
+	handle(recv(c_sock, c_user->pwd, PWD_SIZE, 0), c_sock, SERVER); // client manda password
 	while ( (res = login(c_user)) != 0){
 		// login non andato a buon fine, ritenta
 		net_res = htonl(res);
 		send(c_sock, &net_res, sizeof(net_res), 0); // manda codice di errore al client
-		recv(c_sock, c_user->usr, USR_SIZE, 0);
-		recv(c_sock, c_user->pwd, PWD_SIZE, 0);
+		handle(recv(c_sock, c_user->usr, USR_SIZE, 0), c_sock, SERVER);
+		handle(recv(c_sock, c_user->pwd, PWD_SIZE, 0), c_sock, SERVER);
 	}
 	net_res = htonl(res);
 	send(c_sock, &net_res, sizeof(net_res), 0); // manda codice di successo al client
@@ -120,7 +120,7 @@ void *clientThread(void *arg){
 	// acquisizione scelta del client
 	int choice, net_choice;
 	bool answer;
-	recv(c_sock, &net_choice, sizeof(net_choice), 0);
+	handle(recv(c_sock, &net_choice, sizeof(net_choice), 0), c_sock, SERVER);
 	choice = ntohl(net_choice);
 	while (choice != 3){
 		switch(choice){
@@ -139,13 +139,13 @@ void *clientThread(void *arg){
 					switch (res){
 						case 0:
 							// contatto aggiunto
-							char *succ = "Contatto aggiunto\n";
-							send(c_sock, succ, strlen(succ) + 1, 0);
+							char succ[BUF_SIZE] = "Contatto aggiunto\n";
+							send(c_sock, succ, BUF_SIZE, 0);
 							break;
 						default:
 							// errore
-							char *err = "Errore\n";
-							send(c_sock, err, strlen(err) + 1, 0);
+							char err[BUF_SIZE] = "Errore\n";
+							send(c_sock, err, BUF_SIZE, 0);
 							break;
 					}
 					free(contatto); // evita memory leak
@@ -168,27 +168,28 @@ void *clientThread(void *arg){
 							// contatto trovato
 							char buffer[BUF_SIZE];
 							snprintf(buffer, BUF_SIZE, "%s%s\n", contatto->name, contatto->number);
-							send(c_sock, buffer, strlen(buffer), 0); // invia contatto e numero al client
+							send(c_sock, buffer, BUF_SIZE, 0); // invia contatto e numero al client
 							break;
 						case 1:
 							// contatto non trovato
-							char *not = "Contatto non trovato\n";
-							send(c_sock, not, strlen(not) + 1, 0);
+							char not[BUF_SIZE] = "Contatto non trovato\n";
+							send(c_sock, not, BUF_SIZE, 0);
 							break;
 						default:
 							// errore
-							char *err = "Errore\n";
-							send(c_sock, err, strlen(err) + 1, 0);
+							char err[BUF_SIZE] = "Errore\n";
+							send(c_sock, err, BUF_SIZE, 0);
 							break;
 					}
 					free(contatto); // evita memory leak
 				}
 				break;
 		}
-		recv(c_sock, &net_choice, sizeof(net_choice), 0);
+		handle(recv(c_sock, &net_choice, sizeof(net_choice), 0), c_sock, SERVER);
 		choice = ntohl(net_choice);
 	}
 	
+	puts("client esce, chiudo connessione");
 	close(c_sock);
 	free(c_user);
 	pthread_exit(NULL);
@@ -225,9 +226,16 @@ int login(User *utente){
 		buffer[i++] = c;
 		if (c == '\n'){
 			// ho letto una riga: "username password\n"
-			buffer[i] = '\0'; // controllare
+			buffer[i] = '\0';
 			char *username = strtok(buffer, " \n");
 			char *password = strtok(NULL, " \n");
+			
+			if (username == NULL || password == NULL){
+				memset(buffer, 0, BUF_SIZE);
+				i = 0;
+				continue;
+			}
+			
 			if (strcmp(username, utente->usr) == 0 && strcmp(password, utente->pwd) == 0){
 				close(fd);
 				return 0; // utente riconosciuto
@@ -280,12 +288,10 @@ bool checkPermission(char *filename, char *username, char *perm){
 Contact *getContact(int sock){
 	// funzione per la creazione di un nuovo contatto da inserire o cercare
 	Contact *contatto = malloc(sizeof(Contact));
-	contatto->name[0] = '\0';
-	contatto->number[0] = '\0';
 	
 	// il client invia il nuovo contatto
 	char buffer[BUF_SIZE];
-	recv(sock, buffer, BUF_SIZE, 0);
+	handle(recv(sock, buffer, BUF_SIZE, 0), sock, SERVER);
 	
 	char *token = strtok(buffer, " \n");
 	while (token != NULL){
@@ -324,51 +330,42 @@ int addContact(char *filename, Contact *contatto){
 }
 
 int searchContact(char *filename, Contact *contatto){
-	// funzione per la ricerca di un contatto in rubrica
 	int fd = open(filename, O_RDONLY);
 	if (fd == -1){
 		perror("open");
 		return -1;
 	}
-	
-	char name[NAME_SIZE];
-	char filelen[BUF_SIZE];
-	
-	// leggiamo un carattere alla volta
-	char c;
+
+	char buffer[BUF_SIZE];
 	int i = 0;
+	char c;
+
 	while (read(fd, &c, 1) == 1){
-		filelen[i++] = c;
+		buffer[i++] = c;
 		if (c == '\n'){
-			strcpy(name, contatto->name);
-			char *token = strtok(filelen, " \n");
-			char *token_name = strtok(name, " ");
-			while (token != NULL && token_name != NULL && strcmp(token, token_name) == 0){
-				token = strtok(NULL, " \n");
-				token_name = strtok(NULL, " ");
-			}
-			
-			if (token_name == NULL){
-				// corrispondenza possibile
-				if (token != NULL){
+			buffer[i] = '\0';
+
+			if (strncmp(buffer, contatto->name, strlen(contatto->name)) == 0){
+				// Cerca numero
+				char *token = strtok(buffer, " \n");
+				while (token != NULL){
 					char *end;
 					long num = strtol(token, &end, 10);
 					
 					if (*end == '\0'){
-						// il token è il numero di telefono, corrispondenza trovata
 						strcpy(contatto->number, token);
 						close(fd);
-						return 0;
+						return 0; // contatto trovato
 					}
+					token = strtok(NULL, " \n");
 				}
 			}
-			
-			memset(filelen, 0, BUF_SIZE); // reset del buffer
-			i = 0; // riparto dall'inizio del buffer
+
+			memset(buffer, 0, BUF_SIZE);
+			i = 0;
 		}
 	}
-	
-	contatto->number[0] = '\0'; // contatto non trovato
+
 	close(fd);
-	return 1;
+	return 1; // non trovato
 }
