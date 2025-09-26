@@ -4,7 +4,7 @@ Progetto universitario per l'esame di Sistemi Operativi.
 
 Il progetto riguarda un servizio di **elenco telefonico** ed è costituito da un'applicazione **client** e una **server**, entrambe scritte in **linguaggio C**.
 
-Il server è **multithreaded** ed accetta fino ad **8 connessioni** contemporaneamente, creando un thread per ogni client connesso.
+Il server è **multithreaded** ed accetta fino ad **8 connessioni contemporaneamente**, creando un thread per ogni client connesso.
 
 Inoltre mantiene **due file di configurazione**:
 - *users*: contiene username e password dei client autorizzati.
