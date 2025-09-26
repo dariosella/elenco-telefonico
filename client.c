@@ -7,17 +7,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 
-#define BUF_SIZE (256)
-#define NAME_SIZE (64)
-#define NUMBER_SIZE (32)
-#define USR_SIZE (64)
-#define PWD_SIZE (64)
+#include "header.h"
 
 int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort);
 
 int main(int argc, char *argv[]){
-	int s_sock, s_sock_len;
+	int s_sock;
 	struct sockaddr_in server;
 	struct hostent *hp;
 	
@@ -57,7 +54,7 @@ int main(int argc, char *argv[]){
 	// login del client
 	char username[USR_SIZE];
 	char password[PWD_SIZE];
-	int res = -1; // gestire meglio res
+	int res = -1;
 	
 	while (res != 0){
 		printf("%s", "Inserisci username: ");
@@ -83,28 +80,34 @@ int main(int argc, char *argv[]){
 	}
 	printf("Benvenuto %s!\n", username);
 	
-	int choice;
+	int choice, net_choice;
 	bool answer;
-	printf("Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire");
-	scanf(" %d", &choice); // fflush stdin da inserire
+	printf("Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
+	scanf("%d", &choice);
+	while (getchar() != '\n');
+	
 	while (choice != 3){
 		switch (choice){
 			case 1:
-				send(s_sock, &choice, sizeof(choice), 0);
+				net_choice = htonl(choice);
+				send(s_sock, &net_choice, sizeof(net_choice), 0);
 				recv(s_sock, &answer, sizeof(answer), 0);
 				if (answer){
 					char buffer[BUF_SIZE];
 					printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome Numero'\n");
 					fgets(buffer, BUF_SIZE, stdin);
 					send(s_sock, buffer, BUF_SIZE, 0);
-					// aggiungere risposta dal sever di SUCCESSO o FALLIMENTO
+					//risposta dal sever di SUCCESSO o FALLIMENTO
+					recv(s_sock, buffer, BUF_SIZE, 0);
+					printf("%s", buffer);
 					
 				} else {
 					puts("Non hai i permessi necessari per aggiungere il contatto");
 				}
 				break;
 			case 2:
-				send(s_sock, &choice, sizeof(choice), 0);
+				net_choice = htonl(choice);
+				send(s_sock, &net_choice, sizeof(net_choice), 0);
 				recv(s_sock, &answer, sizeof(answer), 0);
 				if (answer){
 					char buffer[BUF_SIZE];
@@ -112,23 +115,23 @@ int main(int argc, char *argv[]){
 					fgets(buffer, BUF_SIZE, stdin);
 					send(s_sock, buffer, BUF_SIZE, 0);
 					
-					// il server invia il contatto completo, altrimenti 'contatto non trovato'
+					// il server invia il contatto completo altrimenti no
 					recv(s_sock, buffer, BUF_SIZE, 0);
 					printf("%s", buffer);
 				} else {
 					puts("Non hai i permessi necessari per cercare il contatto");
 				}
 				break;
-			case 3:
-				send(s_sock, &choice, sizeof(choice), 0);
-				break;
 			default:
 				puts("Scelta non valida");
 		}
-		printf("Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire");
-		scanf(" %d", &choice);
+		printf("Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
+		scanf("%d", &choice);
+		while (getchar() != '\n');
 	}
 	
+	net_choice = htonl(choice);
+	send(s_sock, &net_choice, sizeof(net_choice), 0); // se choice è 3
 	close(s_sock);
 	exit(EXIT_SUCCESS);
 }
