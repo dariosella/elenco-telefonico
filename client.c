@@ -57,6 +57,9 @@ int main(int argc, char *argv[]){
 	int res = -1, net_res;
 	
 	while (res != 0){
+		memset(username, 0, USR_SIZE);
+		memset(password, 0, PWD_SIZE);
+		
 		printf("%s", "Inserisci username: ");
 		fgets(username, USR_SIZE, stdin);
 		username[strcspn(username, "\n")] = '\0';
@@ -65,10 +68,10 @@ int main(int argc, char *argv[]){
 		fgets(password, PWD_SIZE, stdin);
 		password[strcspn(password, "\n")] = '\0';
 		
-		send(s_sock, username, strlen(username) + 1, 0); // invia username al server
-		send(s_sock, password, strlen(password) + 1, 0); // invia password al server
+		send(s_sock, username, USR_SIZE, 0); // invia username al server
+		send(s_sock, password, PWD_SIZE, 0); // invia password al server
 		
-		recv(s_sock, &net_res, sizeof(net_res), 0); // riceve il risultato del login
+		handle(recv(s_sock, &net_res, sizeof(net_res), 0), s_sock, CLIENT); // riceve il risultato del login
 		res = ntohl(net_res);
 		switch (res){
 			case 1:
@@ -92,14 +95,15 @@ int main(int argc, char *argv[]){
 			case 1:
 				net_choice = htonl(choice);
 				send(s_sock, &net_choice, sizeof(net_choice), 0);
-				recv(s_sock, &answer, sizeof(answer), 0);
+				handle(recv(s_sock, &answer, sizeof(answer), 0), s_sock, CLIENT);
 				if (answer){
 					char buffer[BUF_SIZE];
 					printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome Numero'\n");
 					fgets(buffer, BUF_SIZE, stdin);
 					send(s_sock, buffer, BUF_SIZE, 0);
 					//risposta dal sever di SUCCESSO o FALLIMENTO
-					recv(s_sock, buffer, BUF_SIZE, 0);
+					memset(buffer, 0, BUF_SIZE);
+					handle(recv(s_sock, buffer, BUF_SIZE, 0), s_sock, CLIENT);
 					printf("%s", buffer);
 					
 				} else {
@@ -109,7 +113,7 @@ int main(int argc, char *argv[]){
 			case 2:
 				net_choice = htonl(choice);
 				send(s_sock, &net_choice, sizeof(net_choice), 0);
-				recv(s_sock, &answer, sizeof(answer), 0);
+				handle(recv(s_sock, &answer, sizeof(answer), 0), s_sock, CLIENT);
 				if (answer){
 					char buffer[BUF_SIZE];
 					printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome'\n");
@@ -117,7 +121,8 @@ int main(int argc, char *argv[]){
 					send(s_sock, buffer, BUF_SIZE, 0);
 					
 					// il server invia il contatto completo altrimenti no
-					recv(s_sock, buffer, BUF_SIZE, 0);
+					memset(buffer, 0, BUF_SIZE);
+					handle(recv(s_sock, buffer, BUF_SIZE, 0), s_sock, CLIENT);
 					printf("%s", buffer);
 				} else {
 					puts("Non hai i permessi necessari per cercare il contatto");
@@ -159,6 +164,7 @@ int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort){
 	
 	return 0;
 }
+
 
 
 
