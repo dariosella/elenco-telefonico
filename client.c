@@ -54,7 +54,7 @@ int main(int argc, char *argv[]){
 	// login del client
 	char username[USR_SIZE];
 	char password[PWD_SIZE];
-	int res = -1;
+	int res = -1, net_res;
 	
 	while (res != 0){
 		printf("%s", "Inserisci username: ");
@@ -68,7 +68,8 @@ int main(int argc, char *argv[]){
 		send(s_sock, username, strlen(username) + 1, 0); // invia username al server
 		send(s_sock, password, strlen(password) + 1, 0); // invia password al server
 		
-		recv(s_sock, &res, sizeof(res), 0); // riceve il risultato del login
+		recv(s_sock, &net_res, sizeof(net_res), 0); // riceve il risultato del login
+		res = ntohl(net_res);
 		switch (res){
 			case 1:
 				puts("Password sbagliata");
