@@ -101,23 +101,27 @@ int main(int argc, char *argv[]){
 void *clientThread(void *arg){
 	int c_sock = *((int *)arg);
 	free(arg); // evita memory leak
-	int choice, res;
-	bool answer;
 	
 	// login del client
+	int res, net_res;
 	User *c_user = malloc(sizeof(User));
 	recv(c_sock, c_user->usr, USR_SIZE, 0); // client manda username
 	recv(c_sock, c_user->pwd, PWD_SIZE, 0); // client manda password
 	while ( (res = login(c_user)) != 0){
 		// login non andato a buon fine, ritenta
-		send(c_sock, &res, sizeof(res), 0); // manda codice di errore al client
+		net_res = htonl(res);
+		send(c_sock, &net_res, sizeof(net_res), 0); // manda codice di errore al client
 		recv(c_sock, c_user->usr, USR_SIZE, 0);
 		recv(c_sock, c_user->pwd, PWD_SIZE, 0);
 	}
-	send(c_sock, &res, sizeof(res), 0); // manda codice di successo al client
+	net_res = htonl(res);
+	send(c_sock, &net_res, sizeof(net_res), 0); // manda codice di successo al client
 	
 	// acquisizione scelta del client
-	recv(c_sock, &choice, sizeof(choice), 0);
+	int choice, net_choice;
+	bool answer;
+	recv(c_sock, &net_choice, sizeof(net_choice), 0);
+	choice = ntohl(net_choice);
 	while (choice != 3){
 		switch(choice){
 			case 1:
@@ -181,7 +185,8 @@ void *clientThread(void *arg){
 				}
 				break;
 		}
-		recv(c_sock, &choice, sizeof(choice), 0);
+		recv(c_sock, &net_choice, sizeof(net_choice), 0);
+		choice = ntohl(net_choice);
 	}
 	
 	close(c_sock);
