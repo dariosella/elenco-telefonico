@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <ctype.h>
 
 #define LISTENQ (8)
 #define BUF_SIZE (256)
@@ -8,9 +9,18 @@
 #define NUMBER_SIZE (32)
 #define USR_SIZE (64)
 #define PWD_SIZE (64)
+#define SERVER (0)
+#define CLIENT (1)
 
-#define SERVER 0
-#define CLIENT 1
+typedef struct {
+	char usr[USR_SIZE];
+	char pwd[PWD_SIZE];
+} User;
+
+typedef struct {
+	char name[NAME_SIZE];
+	char number[NUMBER_SIZE];
+} Contact;
 
 void handle(int res, int sock, int who){
 	if (res == 0){
@@ -27,10 +37,8 @@ void handle(int res, int sock, int who){
 		// errore
 		perror("recv");
 		if (who == SERVER){
-			puts("Errore");
 			pthread_exit(NULL);
 		} else if (who == CLIENT){
-			puts("Errore");
 			exit(EXIT_FAILURE);
 		}
 	}
