@@ -10,17 +10,7 @@
 #include <fcntl.h>
 #include <stdbool.h>
 
-#include "header.h"
-
-typedef struct {
-	char usr[USR_SIZE];
-	char pwd[PWD_SIZE];
-} User;
-
-typedef struct {
-	char name[NAME_SIZE];
-	char number[NUMBER_SIZE];
-} Contact;
+#include "helper.h"
 
 pthread_mutex_t fmutex;
 
@@ -87,6 +77,11 @@ int main(int argc, char *argv[]){
 		printf("connessione al server da %s\n", inet_ntoa(client.sin_addr));
 		
 		int *c_sockptr = malloc(sizeof(int));
+		if (c_sockptr == NULL){
+			perror("malloc");
+			exit(EXIT_FAILURE);
+		}
+		
 		*c_sockptr = c_sock; // copia separata da passare al thread
 		
 		if (pthread_create(&tid, NULL, clientThread, (void *)c_sockptr) < 0){
@@ -105,6 +100,11 @@ void *clientThread(void *arg){
 	// login del client
 	int res, net_res;
 	User *c_user = malloc(sizeof(User));
+	if (c_user == NULL){
+		perror("malloc");
+		pthread_exit(NULL);
+	}
+	
 	handle(recv(c_sock, c_user->usr, USR_SIZE, 0), c_sock, SERVER); // client manda username
 	handle(recv(c_sock, c_user->pwd, PWD_SIZE, 0), c_sock, SERVER); // client manda password
 	while ( (res = login(c_user)) != 0){
@@ -123,7 +123,7 @@ void *clientThread(void *arg){
 	handle(recv(c_sock, &net_choice, sizeof(net_choice), 0), c_sock, SERVER);
 	choice = ntohl(net_choice);
 	while (choice != 3){
-		switch(choice){
+		switch (choice){
 			case 1:
 				// check permessi
 				answer = checkPermission("permissions", c_user->usr, "w");
@@ -158,6 +158,10 @@ void *clientThread(void *arg){
 				if (answer){
 					// accesso consentito
 					Contact *contatto = getContact(c_sock); // client invia il contatto
+					if (contatto == NULL){
+						perror("malloc");
+						pthread_exit(NULL);
+					}
 					
 					pthread_mutex_lock(&fmutex);
 					int res = searchContact("rubrica", contatto); // cerca il contatto in rubrica
@@ -167,7 +171,7 @@ void *clientThread(void *arg){
 						case 0:
 							// contatto trovato
 							char buffer[BUF_SIZE];
-							snprintf(buffer, BUF_SIZE, "%s%s\n", contatto->name, contatto->number);
+							snprintf(buffer, BUF_SIZE, "%s %s\n", contatto->name, contatto->number);
 							send(c_sock, buffer, BUF_SIZE, 0); // invia contatto e numero al client
 							break;
 						case 1:
@@ -217,6 +221,11 @@ int parseCmdLine(int argc, char *argv[], char **sPort){
 int login(User *utente){
 	// ogni riga di users è "username password\n"
 	int fd = open("users", O_RDONLY);
+	if (fd == -1){
+		perror("open");
+		return -1;
+	}
+	
 	char buffer[BUF_SIZE];
 	
 	int i = 0;
@@ -256,6 +265,11 @@ int login(User *utente){
 bool checkPermission(char *filename, char *username, char *perm){
 	// ogni riga di permission è "username permission\n"
 	int fd = open(filename, O_RDONLY);
+	if (fd == -1){
+		perror("open");
+		return false;
+	}
+	
 	char buffer[BUF_SIZE];
 	
 	int i = 0;
@@ -288,6 +302,13 @@ bool checkPermission(char *filename, char *username, char *perm){
 Contact *getContact(int sock){
 	// funzione per la creazione di un nuovo contatto da inserire o cercare
 	Contact *contatto = malloc(sizeof(Contact));
+	if (contatto == NULL){
+		perror("malloc");
+		return NULL;
+	}
+	
+	contatto->name[0] = '\0';
+	contatto->number[0] = '\0';
 	
 	// il client invia il nuovo contatto
 	char buffer[BUF_SIZE];
@@ -310,6 +331,9 @@ Contact *getContact(int sock){
 		token = strtok(NULL, " \n");
 	}
 	
+	int namelen = strlen(contatto->name);
+	contatto->name[namelen - 1] = '\0'; // toglie lo spazio finale
+	
 	return contatto;
 }
 
@@ -322,7 +346,7 @@ int addContact(char *filename, Contact *contatto){
 	}
 	
 	char buffer[BUF_SIZE];
-	snprintf(buffer, BUF_SIZE, "%s%s\n", contatto->name, contatto->number);
+	snprintf(buffer, BUF_SIZE, "%s %s\n", contatto->name, contatto->number);
 	write(fd, buffer, strlen(buffer));
 	
 	close(fd);
@@ -344,28 +368,52 @@ int searchContact(char *filename, Contact *contatto){
 		buffer[i++] = c;
 		if (c == '\n'){
 			buffer[i] = '\0';
-
-			if (strncmp(buffer, contatto->name, strlen(contatto->name)) == 0){
-				// Cerca numero
-				char *token = strtok(buffer, " \n");
-				while (token != NULL){
-					char *end;
-					long num = strtol(token, &end, 10);
-					
-					if (*end == '\0'){
-						strcpy(contatto->number, token);
-						close(fd);
-						return 0; // contatto trovato
-					}
-					token = strtok(NULL, " \n");
+			
+			// NOTA: fare funzione crea struttura settata da usare qui e in getContact
+			Contact *temp = malloc(sizeof(Contact));
+			if (temp == NULL){
+				perror("malloc");
+				return -1;
+			}
+			
+			temp->name[0] = '\0';
+			temp->number[0] = '\0';
+			
+			char *token = strtok(buffer, " \n");
+			while (token != NULL){
+				char *end;
+				long num = strtol(token, &end, 10);
+				
+				if (*end == '\0'){
+					// copia numero
+					strcpy(temp->number, token);
+				} else {
+					// copia nome
+					strcat(temp->name, token);
+					strcat(temp->name, " ");
 				}
+				
+				token = strtok(NULL, " \n");
+			}
+			
+			int namelen = strlen(temp->name);
+			temp->name[namelen - 1] = '\0';
+			
+			printf("temp: %s\norig: %s\n", temp->name, contatto->name);
+			
+			if (strcmp(temp->name, contatto->name) == 0){
+				strcpy(contatto->number, temp->number);
+				free(temp);
+				close(fd);
+				return 0; // contatto trovato
 			}
 
+			free(temp);
 			memset(buffer, 0, BUF_SIZE);
 			i = 0;
 		}
 	}
-
+	
 	close(fd);
 	return 1; // non trovato
 }
