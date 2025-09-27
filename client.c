@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#include "header.h"
+#include "helper.h"
 
 int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort);
 
