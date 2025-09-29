@@ -12,5 +12,5 @@ typedef struct {
 } Contact;
 
 Contact *createContact(char *buffer);
-int addContact(char *filename, Contact *contatto);
-int searchContact(char *filename, Contact *contatto);
+void addContact(char *filename, Contact *contatto, char *answer);
+void searchContact(char *filename, Contact *contatto, char *answer);
