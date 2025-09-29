@@ -1,13 +1,13 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
-#include <unistd.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 
 #include "helper.h"
 
@@ -68,6 +68,7 @@ int main(int argc, char *argv[]){
 		fgets(password, PWD_SIZE, stdin);
 		password[strcspn(password, "\n")] = '\0';
 		
+		// con createUser inviare la struct
 		send(s_sock, username, USR_SIZE, 0); // invia username al server
 		send(s_sock, password, PWD_SIZE, 0); // invia password al server
 		
@@ -88,21 +89,22 @@ int main(int argc, char *argv[]){
 	bool answer;
 	printf("Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
 	scanf("%d", &choice);
-	while (getchar() != '\n');
+	while (getchar() != '\n'); // fflush stdin
 	
 	while (choice != 3){
 		switch (choice){
 			case 1:
 				net_choice = htonl(choice);
 				send(s_sock, &net_choice, sizeof(net_choice), 0);
+				// il server mi dice se ho i permessi necessari
 				handle(recv(s_sock, &answer, sizeof(answer), 0), s_sock, CLIENT);
 				if (answer){
 					char buffer[BUF_SIZE];
 					printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome Numero'\n");
 					fgets(buffer, BUF_SIZE, stdin);
 					send(s_sock, buffer, BUF_SIZE, 0);
-					//risposta dal sever di SUCCESSO o FALLIMENTO
 					memset(buffer, 0, BUF_SIZE);
+					// risposta dal sever di successo o fallimento
 					handle(recv(s_sock, buffer, BUF_SIZE, 0), s_sock, CLIENT);
 					printf("%s", buffer);
 					
@@ -113,6 +115,7 @@ int main(int argc, char *argv[]){
 			case 2:
 				net_choice = htonl(choice);
 				send(s_sock, &net_choice, sizeof(net_choice), 0);
+				// il server mi dice se ho i permessi necessari
 				handle(recv(s_sock, &answer, sizeof(answer), 0), s_sock, CLIENT);
 				if (answer){
 					char buffer[BUF_SIZE];
@@ -120,7 +123,7 @@ int main(int argc, char *argv[]){
 					fgets(buffer, BUF_SIZE, stdin);
 					send(s_sock, buffer, BUF_SIZE, 0);
 					
-					// il server invia il contatto completo altrimenti no
+					// il server invia il contatto e numero
 					memset(buffer, 0, BUF_SIZE);
 					handle(recv(s_sock, buffer, BUF_SIZE, 0), s_sock, CLIENT);
 					printf("%s", buffer);
@@ -133,7 +136,7 @@ int main(int argc, char *argv[]){
 		}
 		printf("Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
 		scanf("%d", &choice);
-		while (getchar() != '\n');
+		while (getchar() != '\n'); // fflush stdin
 	}
 	
 	net_choice = htonl(choice);
