@@ -26,10 +26,6 @@ int parseCmdLine(int argc, char *argv[], char **sPort);
 int login(User *utente);
 bool checkPermission(char *filename, char *username, char *perm);
 
-Contact *createContact(char *buffer);
-int addContact(char *filename, Contact *contatto);
-int searchContact(char *filename, Contact *contatto);
-
 int main(int argc, char *argv[]){
 	pthread_mutex_init(&fmutex, NULL); // inizializza mutex per lettura/scrittura su rubrica
 	int l_sock, c_sock; // listen socket e client socket
@@ -139,28 +135,17 @@ void *clientThread(void *arg){
 					char buffer[BUF_SIZE];
 					handle(recv(c_sock, buffer, BUF_SIZE, 0), c_sock, SERVER); // il client invia contatto
 					Contact *contatto = createContact(buffer);
+					if (contatto == NULL){
+						perror("malloc");
+						pthread_exit(NULL);
+					}
+					memset(buffer, 0, BUF_SIZE); // azzero per poi memorizzare la risposta del server
 					
 					pthread_mutex_lock(&fmutex);
-					int res = addContact("rubrica", contatto); // aggiungo il contatto in rubrica
+					addContact("rubrica", contatto, buffer); // aggiungo il contatto in rubrica
 					pthread_mutex_unlock(&fmutex);
 					
-					switch (res){
-						case 0:
-							// contatto aggiunto
-							char succ[BUF_SIZE] = "Contatto aggiunto\n";
-							send(c_sock, succ, BUF_SIZE, 0);
-							break;
-						case 1:
-							// nome o numero non dati in input
-							char notinput[BUF_SIZE] = "Nome o Numero non inseriti\n";
-							send(c_sock, notinput, BUF_SIZE, 0);
-							break;
-						default:
-							// errore
-							char err[BUF_SIZE] = "Errore\n";
-							send(c_sock, err, BUF_SIZE, 0);
-							break;
-					}
+					send(c_sock, buffer, BUF_SIZE, 0); // invio del risultato al client
 					free(contatto); // evita memory leak
 				}
 				break;
@@ -177,34 +162,13 @@ void *clientThread(void *arg){
 						perror("malloc");
 						pthread_exit(NULL);
 					}
+					memset(buffer, 0, BUF_SIZE);
 					
 					pthread_mutex_lock(&fmutex);
-					int res = searchContact("rubrica", contatto); // cerca il contatto in rubrica
+					searchContact("rubrica", contatto, buffer); // cerca il contatto in rubrica
 					pthread_mutex_unlock(&fmutex);
 					
-					switch (res){
-						case 0:
-							// contatto trovato
-							char buffer[BUF_SIZE];
-							snprintf(buffer, BUF_SIZE, "%s %s\n", contatto->name, contatto->number);
-							send(c_sock, buffer, BUF_SIZE, 0); // invia contatto e numero al client
-							break;
-						case 1:
-							// contatto non trovato
-							char not[BUF_SIZE] = "Contatto non trovato\n";
-							send(c_sock, not, BUF_SIZE, 0);
-							break;
-						case 2:
-							// contatto già presente
-							char pres[BUF_SIZE] = "Contatto già presente in rubrica\n";
-							send(c_sock, pres, BUF_SIZE, 0);
-							break;
-						default:
-							// errore
-							char err[BUF_SIZE] = "Errore\n";
-							send(c_sock, err, BUF_SIZE, 0);
-							break;
-					}
+					send(c_sock, buffer, BUF_SIZE, 0); // invio del risultato al client
 					free(contatto); // evita memory leak
 				}
 				break;
