@@ -290,5 +290,3 @@ bool checkPermission(char *filename, char *username, char *perm){
 	close(fd);
 	return false;
 }
-
-
