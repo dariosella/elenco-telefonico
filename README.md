@@ -1,7 +1,8 @@
 # Elenco Telefonico
 
-Progetto universitario per l'esame di Sistemi Operativi  
-Università degli Studi di Roma Tor Vergata
+Progetto universitario per l'esame di Sistemi Operativi
+Autore: Dario Sella
+Università: Università degli Studi di Roma Tor Vergata
 
 ## Descrizione
 
