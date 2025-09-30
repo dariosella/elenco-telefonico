@@ -50,13 +50,6 @@ per generare gli eseguibili `server` e `client`.
 ./client -a <indirizzo_server> -p <porta>
 ```
 
-## Esempio d’uso
-
-1. Avvia il server: `./server -p 5000`
-2. Avvia il client: `./client -a 127.0.0.1 -p 5000`
-3. Effettua il login con le credenziali di un utente presente nel file `utenti`
-4. Scegli se aggiungere o cercare un contatto
-
 ## Autore
 
 Dario Sella  
