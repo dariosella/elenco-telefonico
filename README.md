@@ -18,16 +18,16 @@ Il server è multithreaded e permette fino a 8 connessioni contemporanee, gesten
 
 ## Struttura del progetto
 
-- `server.c` — codice del server (gestione connessioni, login, permessi, operazioni)
-- `client.c` — codice del client (interfaccia utente, invio comandi)
+- `server.c` — codice del server
+- `client.c` — codice del client
 - `contact.c`/`contact.h` — gestione dei dati dei contatti
 - `helper.c`/`helper.h` — funzioni di utilità, costanti e macro
 - `Makefile` — compilazione automatica
 
 ## File di configurazione
 
-- `utenti` — elenca gli utenti autorizzati (`username password`)
-- `permessi` — associa a ogni utente i permessi (`username r` oppure `username w`)
+- `utenti` — elenca gli utenti autorizzati
+- `permessi` — associa a ogni utente i permessi
 
 ## Compilazione
 
