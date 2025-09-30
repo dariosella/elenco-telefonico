@@ -56,12 +56,6 @@ per generare gli eseguibili `server` e `client`.
 3. Effettua il login con le credenziali di un utente presente nel file `utenti`
 4. Scegli se aggiungere o cercare un contatto
 
-## Note tecniche
-
-- Il server crea un thread per ogni client collegato
-- L’accesso al file “rubrica” è protetto da mutex
-- Le credenziali e i permessi sono gestiti in locale tramite file di testo
-
 ## Autore
 
 Dario Sella  
