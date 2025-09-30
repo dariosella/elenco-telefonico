@@ -1,3 +1,10 @@
+/*
+ * Progetto: Elenco Telefonico
+ * Autore: Dario Sella
+ * Corso: Sistemi Operativi
+ * Data: Settembre 2025
+*/
+
 #include "helper.h"
 
 void handle(int res, int sock, int who){
