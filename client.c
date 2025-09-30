@@ -171,14 +171,3 @@ int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort){
 
 	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
