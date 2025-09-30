@@ -2,6 +2,8 @@
 
 Progetto universitario per l'esame di Sistemi Operativi.
 
+**Università:** Università degli Studi di [Nome della tua università]
+
 Il progetto riguarda un servizio di **elenco telefonico** ed è costituito da un'applicazione **client** e una **server**, entrambe scritte in **linguaggio C**.
 
 Il server è **multithreaded** ed accetta fino ad **8 connessioni contemporaneamente**, creando un thread per ogni client connesso.
