@@ -75,7 +75,6 @@ int main(int argc, char *argv[]){
 		fgets(password, PWD_SIZE, stdin);
 		password[strcspn(password, "\n")] = '\0';
 		
-		// con createUser inviare la struct
 		send(s_sock, username, USR_SIZE, 0); // invia username al server
 		send(s_sock, password, PWD_SIZE, 0); // invia password al server
 		
