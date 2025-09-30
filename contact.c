@@ -1,3 +1,10 @@
+/*
+ * Progetto: Elenco Telefonico
+ * Autore: Dario Sella
+ * Corso: Sistemi Operativi
+ * Data: Settembre 2025
+*/
+
 #include "contact.h"
 
 Contact *createContact(char *buffer){
