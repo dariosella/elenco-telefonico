@@ -146,28 +146,24 @@ int main(int argc, char *argv[]){
 }
 
 int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort){
-	int n = 1;
+	if (argc < 5){
+		printf("Usage: %s -a (indirizzo remoto) -p (porta remota) [-h]\n", argv[0]);
+		exit(EXIT_FAILURE);
+	}
 	
-	while (n < argc){
-		if ( !strncmp(argv[n], "-a", 2) || !strncmp(argv[n], "-A", 2) ){
-			*sAddr = argv[++n]; // salva indirizzo o nome host
-		} else if ( !strncmp(argv[n], "-p", 2) || !strncmp(argv[n], "-P", 2) ){
-			*sPort = argv[++n]; // salva porta
-		} else if ( !strncmp(argv[n], "-h", 2) || !strncmp(argv[n], "-H", 2) ){
+	for (int i = 0; i < argc; i++){
+		if (!strcmp(argv[i], "-a") || !strcmp(argv[i], "-A")){
+			*sAddr = argv[i + 1];
+		} else if (!strcmp(argv[i], "-p") || !strcmp(argv[i], "-P")){
+			*sPort = argv[i + 1];
+		} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "-H")){
 			printf("Usage: %s -a (indirizzo remoto) -p (porta remota) [-h]\n", argv[0]);
 			exit(EXIT_FAILURE);
 		}
-		++n;
 	}
-	
-	if (argc == 1){
-			printf("Usage: %s -a (indirizzo remoto) -p (porta remota) [-h]\n", argv[0]);
-			exit(EXIT_FAILURE);
-	}
-	
+
 	return 0;
 }
-
 
 
 

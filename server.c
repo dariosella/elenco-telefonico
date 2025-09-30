@@ -20,7 +20,7 @@ typedef struct {
 
 pthread_mutex_t fmutex;
 
-void *clientThread(void *arg);
+void *clientThread(void *arg); // avvio thread
 
 int parseCmdLine(int argc, char *argv[], char **sPort);
 int login(User *utente);
@@ -91,8 +91,10 @@ int main(int argc, char *argv[]){
 			exit(EXIT_FAILURE);
 		}
 		
-		pthread_detach(tid);
+		pthread_detach(tid); // se il thread termina non devo joinarlo per rilasciare le risorse
 	}
+	
+	return 0;
 }
 
 void *clientThread(void *arg){
@@ -122,13 +124,14 @@ void *clientThread(void *arg){
 	// acquisizione scelta del client
 	int choice, net_choice;
 	bool answer;
-	handle(recv(c_sock, &net_choice, sizeof(net_choice), 0), c_sock, SERVER);
-	choice = ntohl(net_choice);
+	handle(recv(c_sock, &net_choice, sizeof(net_choice), 0), c_sock, SERVER); // client manda scelta
+	choice = ntohl(net_choice); // conversione in host byte order
 	while (choice != 3){
 		switch (choice){
 			case 1:
 				// AGGIUNGI CONTATTO
-				answer = checkPermission("permissions", c_user->usr, "w");
+				answer = checkPermission("permessi", c_user->usr, "w");
+				// answer è bool (1 byte) quindi non serve convertirlo in network byte order
 				send(c_sock, &answer, sizeof(answer), 0); // invia risultato al client
 				if (answer){
 					// accesso consentito
@@ -151,7 +154,7 @@ void *clientThread(void *arg){
 				break;
 			case 2:
 				// CERCA CONTATTO
-				answer = checkPermission("permissions", c_user->usr, "r");
+				answer = checkPermission("permessi", c_user->usr, "r");
 				send(c_sock, &answer, sizeof(answer), 0); // invia risultato al client
 				if (answer){
 					// accesso consentito
@@ -177,25 +180,23 @@ void *clientThread(void *arg){
 		choice = ntohl(net_choice);
 	}
 	
-	puts("client uscito");
 	close(c_sock);
 	free(c_user);
 	pthread_exit(NULL);
 }
 
-int parseCmdLine(int argc, char *argv[], char **sPort){
-	// funzione per argomenti corretti, acquisizione della porta su cui il server si mette in ascolto
-	if (argc == 1){
+int parseCmdLine(int argc, char *argv[], char **sPort) {
+	if (argc < 3){
 		printf("Usage: %s -p (port) [-h]\n", argv[0]);
-		exit(EXIT_SUCCESS);
+		exit(EXIT_FAILURE);
 	}
 	
 	for (int i = 1; i < argc; i++){
-		if (!strncmp(argv[i], "-p", 2) || !strncmp(argv[i], "-P", 2)){
-			*sPort = argv[i+1];
-		} else if (!strncmp(argv[i], "-h", 2) || !strncmp(argv[i], "-H", 2)){
+		if (!strcmp(argv[i], "-p") || !strcmp(argv[i], "-P")){
+			*sPort = argv[i + 1];
+		} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "-H")){
 			printf("Usage: %s -p (port) [-h]\n", argv[0]);
-			exit(EXIT_SUCCESS);
+			exit(EXIT_FAILURE);
 		}
 	}
 	
@@ -204,7 +205,7 @@ int parseCmdLine(int argc, char *argv[], char **sPort){
 
 int login(User *utente){
 	// ogni riga di users è "username password\n"
-	int fd = open("users", O_RDONLY);
+	int fd = open("utenti", O_RDONLY);
 	if (fd == -1){
 		perror("open");
 		return -1;
@@ -257,17 +258,21 @@ bool checkPermission(char *filename, char *username, char *perm){
 	while (read(fd, &c, 1) == 1){
 		buffer[i++] = c;
 		if (c == '\n'){
+			// ho letto una riga "username permission\n"
 			buffer[i] = '\0';
 			char *buffer_username = strtok(buffer, " \n");
 			char *buffer_perm = strtok(NULL, " \n");
-			if (strcmp(username, buffer_username) == 0) {
-				if (strstr(buffer_perm, perm) != NULL || strcmp(buffer_perm, "rw") == 0) {
-					close(fd);
-					return true;
-				} else {
-					close(fd);
-					return false;
-			    	}
+			if (buffer_username != NULL && buffer_perm != NULL){
+				if (strcmp(username, buffer_username) == 0) {
+					if (strstr(buffer_perm, perm) != NULL) {
+						// l'utente ha il permesso
+						close(fd);
+						return true;
+					} else {
+						close(fd);
+						return false;
+						}
+				}
 			}
 			
 			memset(buffer, 0, BUF_SIZE);
@@ -278,3 +283,5 @@ bool checkPermission(char *filename, char *username, char *perm){
 	close(fd);
 	return false;
 }
+
+
