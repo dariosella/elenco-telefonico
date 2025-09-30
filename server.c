@@ -211,7 +211,7 @@ int parseCmdLine(int argc, char *argv[], char **sPort) {
 }
 
 int login(User *utente){
-	// ogni riga di users è "username password\n"
+	// ogni riga di utenti è "username password\n"
 	int fd = open("utenti", O_RDONLY);
 	if (fd == -1){
 		perror("open");
@@ -251,7 +251,7 @@ int login(User *utente){
 }
 
 bool checkPermission(char *filename, char *username, char *perm){
-	// ogni riga di permission è "username permission\n"
+	// ogni riga di permessi è "username permission\n"
 	int fd = open(filename, O_RDONLY);
 	if (fd == -1){
 		perror("open");
