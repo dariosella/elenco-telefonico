@@ -7,8 +7,8 @@ Il progetto riguarda un servizio di **elenco telefonico** ed è costituito da un
 Il server è **multithreaded** ed accetta fino ad **8 connessioni contemporaneamente**, creando un thread per ogni client connesso.
 
 Inoltre mantiene **due file di configurazione**:
-- *users*: contiene username e password dei client autorizzati.
-- *permissions*: contiene, per ogni username, i permessi di lettura/scrittura sul file rubrica.
+- *utenti*: contiene username e password dei client autorizzati.
+- *permessi*: contiene, per ogni username, i permessi di lettura/scrittura sul file rubrica.
 
 Ogni client, una volta connesso, deve eseguire il **login**. Se l'autenticazione ha esito positivo, può scegliere tra le seguenti operazioni:
 - **aggiungere** un contatto alla rubrica.
