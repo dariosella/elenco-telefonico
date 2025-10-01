@@ -1,19 +1,12 @@
-/*
- * Progetto: Elenco Telefonico
- * Autore: Dario Sella
- * Corso: Sistemi Operativi
- * Data: Settembre 2025
-*/
-
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "helper.h"
@@ -57,43 +50,89 @@ int main(int argc, char *argv[]){
 	}
 	
 	// client connesso
-	
-	// login del client
 	char username[USR_SIZE];
 	char password[PWD_SIZE];
-	int res = -1, net_res;
+	char perm[PERM_SIZE];
+	int choice, net_choice;
+	int res = -1, net_res = -1;
+	bool answer;
 	
+	// scegliere se loggare o registrarsi
 	while (res != 0){
-		memset(username, 0, USR_SIZE);
-		memset(password, 0, PWD_SIZE);
-		
-		printf("%s", "Inserisci username: ");
-		fgets(username, USR_SIZE, stdin);
-		username[strcspn(username, "\n")] = '\0';
-		
-		printf("%s", "Inserisci password: ");
-		fgets(password, PWD_SIZE, stdin);
-		password[strcspn(password, "\n")] = '\0';
-		
-		send(s_sock, username, USR_SIZE, 0); // invia username al server
-		send(s_sock, password, PWD_SIZE, 0); // invia password al server
-		
-		handle(recv(s_sock, &net_res, sizeof(net_res), 0), s_sock, CLIENT); // riceve il risultato del login
-		res = ntohl(net_res);
-		switch (res){
+		printf("%s", "Scegliere se:\n1. Registrarti\n2. Loggarti\n");
+		scanf("%d", &choice);
+		while (getchar() != '\n'); // fflush stdin
+		net_choice = htonl(choice);
+		send(s_sock, &net_choice, sizeof(net_choice), 0);
+		switch (choice){
 			case 1:
-				puts("Password sbagliata");
+				// REGISTRAZIONE
+				memset(username, 0, USR_SIZE);
+				memset(password, 0, PWD_SIZE);
+				memset(perm, 0, PERM_SIZE);
+				
+				printf("%s", "Inserisci username: ");
+				fgets(username, USR_SIZE, stdin);
+				username[strcspn(username, "\n")] = '\0';
+				
+				printf("%s", "Inserisci password: ");
+				fgets(password, PWD_SIZE, stdin);
+				password[strcspn(password, "\n")] = '\0';
+				
+				printf("%s", "Inserisci un permesso tra:\nlettura - 'r'\nscrittura - 'w'\nlettura e scrittura - 'rw'\n");
+				fgets(perm, PERM_SIZE, stdin);
+				perm[strcspn(perm, "\n")] = '\0';
+				
+				send(s_sock, username, USR_SIZE, 0); // invia username al server
+				send(s_sock, password, PWD_SIZE, 0); // invia password al server
+				send(s_sock, perm, PERM_SIZE, 0); // invia permesso al server
+				
+				handle(recv(s_sock, &net_res, sizeof(net_res), 0), s_sock, CLIENT); // riceve il risultato
+				res = ntohl(net_res);
+				switch (res){
+					case 1:
+						printf("%s già utilizzato\n", username);
+						break;
+					case -1:
+						puts("Errore");
+						break;
+				}
 				break;
 			case 2:
-				printf("%s Non esiste\n", username);
+				// LOGIN
+				memset(username, 0, USR_SIZE);
+				memset(password, 0, PWD_SIZE);
+				
+				printf("%s", "Inserisci username: ");
+				fgets(username, USR_SIZE, stdin);
+				username[strcspn(username, "\n")] = '\0';
+				
+				printf("%s", "Inserisci password: ");
+				fgets(password, PWD_SIZE, stdin);
+				password[strcspn(password, "\n")] = '\0';
+				
+				send(s_sock, username, USR_SIZE, 0); // invia username al server
+				send(s_sock, password, PWD_SIZE, 0); // invia password al server
+				
+				handle(recv(s_sock, &net_res, sizeof(net_res), 0), s_sock, CLIENT); // riceve il risultato
+				res = ntohl(net_res);
+				switch (res){
+					case 1:
+						puts("Password sbagliata");
+						break;
+					case 2:
+						printf("%s Non esiste\n", username);
+						break;
+					case -1:
+						puts("Errore");
+						break;
+				}
 				break;
 		}
 	}
-	printf("Benvenuto %s!\n", username);
 	
-	int choice, net_choice;
-	bool answer;
-	printf("Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
+	printf("Benvenuto %s!\n", username);
+	printf("%s", "Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
 	scanf("%d", &choice);
 	while (getchar() != '\n'); // fflush stdin
 	
@@ -140,7 +179,7 @@ int main(int argc, char *argv[]){
 			default:
 				puts("Scelta non valida");
 		}
-		printf("Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
+		printf("%s", "Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
 		scanf("%d", &choice);
 		while (getchar() != '\n'); // fflush stdin
 	}
@@ -170,3 +209,14 @@ int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort){
 
 	return 0;
 }
+
+
+
+
+
+
+
+
+
+
+

@@ -1,40 +1,31 @@
-/*
- * Progetto: Elenco Telefonico
- * Autore: Dario Sella
- * Corso: Sistemi Operativi
- * Data: Settembre 2025
-*/
-
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <signal.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "helper.h"
+#include "user.h"
 #include "contact.h"
 
 #define LISTENQ (8)
 
-typedef struct {
-	char usr[USR_SIZE];
-	char pwd[PWD_SIZE];
-} User;
-
-pthread_mutex_t fmutex;
+pthread_mutex_t r_mutex;
+pthread_mutex_t up_mutex;
 
 void *clientThread(void *arg); // avvio thread
 
 int parseCmdLine(int argc, char *argv[], char **sPort);
-int login(User *utente);
-bool checkPermission(char *filename, char *username, char *perm);
+bool checkPermission(char *username, char *perm);
 
 int main(int argc, char *argv[]){
-	pthread_mutex_init(&fmutex, NULL); // inizializza mutex per lettura/scrittura su rubrica
+	pthread_mutex_init(&r_mutex, NULL); // inizializza mutex per lettura/scrittura su rubrica
+	pthread_mutex_init(&up_mutex, NULL); // mutex per login/registra utenti
 	int l_sock, c_sock; // listen socket e client socket
 	struct sockaddr_in server;
 	struct sockaddr_in client;
@@ -107,37 +98,62 @@ int main(int argc, char *argv[]){
 void *clientThread(void *arg){
 	int c_sock = *((int *)arg);
 	free(arg); // evita memory leak
+	int res = -1, net_res = -1;
+	int choice, net_choice;
+	bool answer;
 	
-	// login del client
-	int res, net_res;
+	// creazione utente del client
+	char perm[PERM_SIZE];
 	User *c_user = malloc(sizeof(User));
 	if (c_user == NULL){
 		perror("malloc");
 		pthread_exit(NULL);
 	}
 	
-	handle(recv(c_sock, c_user->usr, USR_SIZE, 0), c_sock, SERVER); // client manda username
-	handle(recv(c_sock, c_user->pwd, PWD_SIZE, 0), c_sock, SERVER); // client manda password
-	while ( (res = login(c_user)) != 0){
-		// login non andato a buon fine, ritenta
-		net_res = htonl(res);
-		send(c_sock, &net_res, sizeof(net_res), 0); // manda codice di errore al client
-		handle(recv(c_sock, c_user->usr, USR_SIZE, 0), c_sock, SERVER);
-		handle(recv(c_sock, c_user->pwd, PWD_SIZE, 0), c_sock, SERVER);
-	}
-	net_res = htonl(res);
-	send(c_sock, &net_res, sizeof(net_res), 0); // manda codice di successo al client
+	c_user->usr[0] = '\0';
+	c_user->pwd[0] = '\0';
 	
-	// acquisizione scelta del client
-	int choice, net_choice;
-	bool answer;
+	// il client sceglie se registrarsi o loggarsi
+	while (res != 0){
+		handle(recv(c_sock, &net_choice, sizeof(net_choice), 0), c_sock, SERVER); // ricevo scelta del client
+		choice = ntohl(net_choice);
+		switch (choice){
+			case 1:
+				// REGISTRAZIONE
+				handle(recv(c_sock, c_user->usr, USR_SIZE, 0), c_sock, SERVER); // client manda username
+				handle(recv(c_sock, c_user->pwd, PWD_SIZE, 0), c_sock, SERVER); // client manda password
+				handle(recv(c_sock, perm, PERM_SIZE, 0), c_sock, SERVER); // client manda permesso
+				
+				pthread_mutex_lock(&up_mutex);
+				res = usrRegister(c_user, perm);
+				pthread_mutex_unlock(&up_mutex);
+				
+				net_res = htonl(res);
+				send(c_sock, &net_res, sizeof(net_res), 0);
+				break;
+			case 2:
+				// LOGIN
+				handle(recv(c_sock, c_user->usr, USR_SIZE, 0), c_sock, SERVER); // client manda username
+				handle(recv(c_sock, c_user->pwd, PWD_SIZE, 0), c_sock, SERVER); // client manda password
+				
+				pthread_mutex_lock(&up_mutex);
+				res = usrLogin(c_user);
+				pthread_mutex_unlock(&up_mutex);
+				
+				net_res = htonl(res);
+				send(c_sock, &net_res, sizeof(net_res), 0);
+				break;
+		}
+	}
+	
+	// il client sceglie se aggiungere un contatto, cercare un contatto o uscire
 	handle(recv(c_sock, &net_choice, sizeof(net_choice), 0), c_sock, SERVER); // client manda scelta
 	choice = ntohl(net_choice); // conversione in host byte order
 	while (choice != 3){
 		switch (choice){
 			case 1:
 				// AGGIUNGI CONTATTO
-				answer = checkPermission("permessi", c_user->usr, "w");
+				answer = checkPermission(c_user->usr, "w");
 				// answer è bool (1 byte) quindi non serve convertirlo in network byte order
 				send(c_sock, &answer, sizeof(answer), 0); // invia risultato al client
 				if (answer){
@@ -151,9 +167,9 @@ void *clientThread(void *arg){
 					}
 					memset(buffer, 0, BUF_SIZE); // azzero per poi memorizzare la risposta del server
 					
-					pthread_mutex_lock(&fmutex);
-					addContact("rubrica", contatto, buffer); // aggiungo il contatto in rubrica
-					pthread_mutex_unlock(&fmutex);
+					pthread_mutex_lock(&r_mutex);
+					addContact(contatto, buffer); // aggiungo il contatto in rubrica
+					pthread_mutex_unlock(&r_mutex);
 					
 					send(c_sock, buffer, BUF_SIZE, 0); // invio del risultato al client
 					free(contatto); // evita memory leak
@@ -161,7 +177,7 @@ void *clientThread(void *arg){
 				break;
 			case 2:
 				// CERCA CONTATTO
-				answer = checkPermission("permessi", c_user->usr, "r");
+				answer = checkPermission(c_user->usr, "r");
 				send(c_sock, &answer, sizeof(answer), 0); // invia risultato al client
 				if (answer){
 					// accesso consentito
@@ -174,9 +190,9 @@ void *clientThread(void *arg){
 					}
 					memset(buffer, 0, BUF_SIZE);
 					
-					pthread_mutex_lock(&fmutex);
-					searchContact("rubrica", contatto, buffer); // cerca il contatto in rubrica
-					pthread_mutex_unlock(&fmutex);
+					pthread_mutex_lock(&r_mutex);
+					searchContact(contatto, buffer); // cerca il contatto in rubrica
+					pthread_mutex_unlock(&r_mutex);
 					
 					send(c_sock, buffer, BUF_SIZE, 0); // invio del risultato al client
 					free(contatto); // evita memory leak
@@ -210,56 +226,15 @@ int parseCmdLine(int argc, char *argv[], char **sPort) {
 	return 0;
 }
 
-int login(User *utente){
-	// ogni riga di utenti è "username password\n"
-	int fd = open("utenti", O_RDONLY);
-	if (fd == -1){
-		perror("open");
-		return -1;
-	}
-	
-	char buffer[BUF_SIZE];
-	
-	int i = 0;
-	char c;
-	while (read(fd, &c, 1) == 1){
-		// leggo un carattere alla volta
-		buffer[i++] = c;
-		if (c == '\n'){
-			// ho letto una riga: "username password\n"
-			buffer[i] = '\0';
-			char *username = strtok(buffer, " \n");
-			char *password = strtok(NULL, " \n");
-			
-			if (username != NULL && password != NULL){
-				if (strcmp(username, utente->usr) == 0 && strcmp(password, utente->pwd) == 0){
-					close(fd);
-					return 0; // utente riconosciuto
-				} else if (strcmp(username, utente->usr) == 0 && strcmp(password, utente->pwd) != 0){
-					close(fd);
-					return 1; // password sbagliata
-				}
-			}
-			
-			memset(buffer, 0, BUF_SIZE);
-			i = 0;
-		}
-	}
-	
-	close(fd);
-	return 2; // utente non esiste
-}
-
-bool checkPermission(char *filename, char *username, char *perm){
-	// ogni riga di permessi è "username permission\n"
-	int fd = open(filename, O_RDONLY);
+bool checkPermission(char *username, char *perm){
+	// ogni riga di permission è "username permission\n"
+	int fd = open("permessi", O_RDONLY);
 	if (fd == -1){
 		perror("open");
 		return false;
 	}
 	
 	char buffer[BUF_SIZE];
-	
 	int i = 0;
 	char c;
 	while (read(fd, &c, 1) == 1){
@@ -278,7 +253,7 @@ bool checkPermission(char *filename, char *username, char *perm){
 					} else {
 						close(fd);
 						return false;
-						}
+					}
 				}
 			}
 			
@@ -290,3 +265,5 @@ bool checkPermission(char *filename, char *username, char *perm){
 	close(fd);
 	return false;
 }
+
+

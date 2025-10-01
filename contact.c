@@ -1,11 +1,10 @@
-/*
- * Progetto: Elenco Telefonico
- * Autore: Dario Sella
- * Corso: Sistemi Operativi
- * Data: Settembre 2025
-*/
-
 #include "contact.h"
+
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
 
 Contact *createContact(char *buffer){
 	// funzione per la creazione di un nuovo contatto da inserire o cercare
@@ -41,9 +40,9 @@ Contact *createContact(char *buffer){
 	return contatto;
 }
 
-void addContact(char *filename, Contact *contatto, char *answer){
+void addContact(Contact *contatto, char *answer){
 	// funzione per l'aggiunta di un nuovo contatto alla fine della rubrica
-	int fd = open(filename, O_CREAT | O_WRONLY | O_APPEND, 0600);
+	int fd = open("rubrica", O_CREAT | O_WRONLY | O_APPEND, 0600);
 	if (fd == -1){
 		perror("open");
 		strcpy(answer, "Errore nell'apertura della rubrica\n");
@@ -62,7 +61,7 @@ void addContact(char *filename, Contact *contatto, char *answer){
 	
 	// controllo se contatto già esiste
 	char temp[BUF_SIZE];
-	searchContact("rubrica", contatto, temp);
+	searchContact(contatto, temp);
 	if (strcmp(buffer, temp) == 0){
 		// se il contatto già esiste
 		strcpy(answer, "Il contatto già esiste\n");
@@ -76,8 +75,8 @@ void addContact(char *filename, Contact *contatto, char *answer){
 	return; // contatto aggiunto
 }
 
-void searchContact(char *filename, Contact *contatto, char *answer){
-	int fd = open(filename, O_RDONLY);
+void searchContact(Contact *contatto, char *answer){
+	int fd = open("rubrica", O_RDONLY);
 	if (fd == -1){
 		perror("open");
 		strcpy(answer, "Errore nell'apertura della rubrica\n");

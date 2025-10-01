@@ -1,16 +1,3 @@
-/*
- * Progetto: Elenco Telefonico
- * Autore: Dario Sella
- * Corso: Sistemi Operativi
- * Data: Settembre 2025
-*/
-
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
-
 #include "helper.h"
 
 typedef struct {
@@ -19,5 +6,5 @@ typedef struct {
 } Contact;
 
 Contact *createContact(char *buffer);
-void addContact(char *filename, Contact *contatto, char *answer);
-void searchContact(char *filename, Contact *contatto, char *answer);
+void addContact(Contact *contatto, char *answer);
+void searchContact(Contact *contatto, char *answer);

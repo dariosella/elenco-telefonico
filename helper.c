@@ -1,11 +1,9 @@
-/*
- * Progetto: Elenco Telefonico
- * Autore: Dario Sella
- * Corso: Sistemi Operativi
- * Data: Settembre 2025
-*/
-
 #include "helper.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <pthread.h>
 
 void handle(int res, int sock, int who){
 	if (res == 0){
