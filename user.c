@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <stdbool.h>
 
 int usrLogin(User *utente){
 	// ogni riga di users è "username password\n"
@@ -94,3 +95,44 @@ int usrRegister(User *utente, char *perm){
 	close(fd2);
 	return 0; // utente registrato
 }
+
+bool checkPermission(char *username, char *perm){
+	// ogni riga di permission è "username permission\n"
+	int fd = open("permessi", O_RDONLY);
+	if (fd == -1){
+		perror("open");
+		return false;
+	}
+	
+	char buffer[BUF_SIZE];
+	int i = 0;
+	char c;
+	while (read(fd, &c, 1) == 1){
+		buffer[i++] = c;
+		if (c == '\n'){
+			// ho letto una riga "username permission\n"
+			buffer[i] = '\0';
+			char *buffer_username = strtok(buffer, " \n");
+			char *buffer_perm = strtok(NULL, " \n");
+			if (buffer_username != NULL && buffer_perm != NULL){
+				if (strcmp(username, buffer_username) == 0) {
+					if (strstr(buffer_perm, perm) != NULL) {
+						// l'utente ha il permesso
+						close(fd);
+						return true;
+					} else {
+						close(fd);
+						return false;
+					}
+				}
+			}
+			
+			memset(buffer, 0, BUF_SIZE);
+			i = 0;
+		}
+	}
+	
+	close(fd);
+	return false;
+}
+

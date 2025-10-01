@@ -1,5 +1,7 @@
 #include "helper.h"
 
+#include <stdbool.h>
+
 typedef struct {
 	char usr[USR_SIZE];
 	char pwd[PWD_SIZE];
@@ -7,3 +9,4 @@ typedef struct {
 
 int usrLogin(User *utente);
 int usrRegister(User *utente, char *perm);
+bool checkPermission(char *username, char *perm);

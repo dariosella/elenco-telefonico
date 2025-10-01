@@ -120,3 +120,4 @@ void searchContact(Contact *contatto, char *answer){
 	close(fd);
 	return;
 }
+
