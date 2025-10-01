@@ -203,6 +203,7 @@ void *clientThread(void *arg){
 		choice = ntohl(net_choice);
 	}
 	
+	puts("client in uscita");
 	close(c_sock);
 	free(c_user);
 	pthread_exit(NULL);

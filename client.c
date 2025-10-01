@@ -81,7 +81,23 @@ int main(int argc, char *argv[]){
 				
 				printf("%s", "Inserisci un permesso tra:\nlettura - 'r'\nscrittura - 'w'\nlettura e scrittura - 'rw'\n");
 				fgets(perm, PERM_SIZE, stdin);
-				perm[strcspn(perm, "\n")] = '\0';
+				if (strchr(perm, '\n') != NULL){
+					perm[strcspn(perm, "\n")] = '\0';
+				} else {
+					while(getchar() != '\n');
+				}
+				
+				while (strcmp(perm, "r") != 0 && strcmp(perm, "w") != 0 && strcmp(perm, "rw") != 0){
+					// controllo se non scrive r, w, o rw
+					memset(perm, 0, PERM_SIZE);
+					printf("%s", "Inserisci un permesso tra:\nlettura - 'r'\nscrittura - 'w'\nlettura e scrittura - 'rw'\n");
+					fgets(perm, PERM_SIZE, stdin);
+					if (strchr(perm, '\n') != NULL){
+						perm[strcspn(perm, "\n")] = '\0';
+					} else {
+						while(getchar() != '\n');
+					}
+				}
 				
 				send(s_sock, username, USR_SIZE, 0); // invia username al server
 				send(s_sock, password, PWD_SIZE, 0); // invia password al server
