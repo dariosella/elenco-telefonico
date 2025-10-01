@@ -27,3 +27,13 @@ void handle(int res, int sock, int who){
 	}
 }
 
+/*
+void flushStdin(){
+ char c;
+ while((c = getchar() != '\n') && c != EOF);
+}
+
+void checkInput(fgets){
+ 
+}
+*/
