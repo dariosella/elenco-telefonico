@@ -22,7 +22,7 @@ Il server è multithreaded e permette fino a 8 connessioni contemporanee, gesten
 - `server.c` — codice del server
 - `client.c` — codice del client
 - `contact.c`/`contact.h` — gestione dei dati dei contatti
-- `user.c`/`user.h' - gestione dei dati degli utenti
+- `user.c`/`user.h` - gestione dei dati degli utenti
 - `helper.c`/`helper.h` — funzioni di utilità, costanti e macro
 - `Makefile` — compilazione automatica
 
