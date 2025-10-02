@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <string.h>
 
 void handle(int res, int sock, int who){
 	if (res == 0){
@@ -32,10 +33,36 @@ void flushInput(){
 	while ( (c = getchar() != '\n') && c != EOF);
 }
 
-void checkInput(char *input){
-	if (input == NULL){
+void safeFgets(char *buffer, size_t size){
+    alarm(TIMER);
+    if (fgets(buffer, size, stdin) == NULL) {
+    	alarm(0);
 		puts("Errore nella scrittura o fine del file");
-		pthread_exit(NULL);
+		exit(0);
+    }
+    
+    alarm(0);
+    if (strchr(buffer, '\n') != NULL){
+    	buffer[strcspn(buffer, "\n")] = '\0';
+    } else {
+    	flushInput();
+    }
+    
+    return;
+}
+
+void safeScanf(int *val){
+	alarm(TIMER);
+	if (scanf("%d", val) == 1){
+		alarm(0);
+		flushInput();
+		
+		return;
+	} else {
+		alarm(0);
+		puts("Input non valido");
+		flushInput();
+		exit(0);
 	}
 }
 

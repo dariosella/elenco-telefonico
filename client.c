@@ -12,13 +12,11 @@
 
 #include "helper.h"
 
-#define TIMER 30
-
 int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort);
 void timeout(int sig);
 void interruptHandler(int sig);
 
-int s_sock;
+int s_sock; // socket di connessione al server
 
 int main(int argc, char *argv[]){
 	struct sockaddr_in server;
@@ -69,11 +67,7 @@ int main(int argc, char *argv[]){
 	// scegliere se loggare o registrarsi
 	while (res != 0){
 		printf("%s", "Scegliere se:\n1. Registrarti\n2. Loggarti\n");
-		
-		alarm(TIMER);
-		scanf("%d", &choice);
-		flushInput();
-		
+		safeScanf(&choice);
 		net_choice = htonl(choice);
 		send(s_sock, &net_choice, sizeof(net_choice), 0);
 		switch (choice){
@@ -84,35 +78,19 @@ int main(int argc, char *argv[]){
 				memset(perm, 0, PERM_SIZE);
 				
 				printf("%s", "Inserisci username: ");
-				alarm(TIMER);
-				fgets(username, USR_SIZE, stdin);
-				username[strcspn(username, "\n")] = '\0';
+				safeFgets(username, USR_SIZE);
 				
 				printf("%s", "Inserisci password: ");
-				alarm(TIMER);
-				fgets(password, PWD_SIZE, stdin);
-				password[strcspn(password, "\n")] = '\0';
+				safeFgets(password, PWD_SIZE);
 				
 				printf("%s", "Inserisci un permesso tra:\nlettura - 'r'\nscrittura - 'w'\nlettura e scrittura - 'rw'\n");
-				alarm(TIMER);
-				fgets(perm, PERM_SIZE, stdin);
-				if (strchr(perm, '\n') != NULL){
-					perm[strcspn(perm, "\n")] = '\0';
-				} else {
-					flushInput();
-				}
+				safeFgets(perm, PERM_SIZE);
 				
 				while (strcmp(perm, "r") != 0 && strcmp(perm, "w") != 0 && strcmp(perm, "rw") != 0){
 					// controllo se non scrive r, w, o rw
 					memset(perm, 0, PERM_SIZE);
 					printf("%s", "Inserisci un permesso tra:\nlettura - 'r'\nscrittura - 'w'\nlettura e scrittura - 'rw'\n");
-					alarm(TIMER);
-					fgets(perm, PERM_SIZE, stdin);
-					if (strchr(perm, '\n') != NULL){
-						perm[strcspn(perm, "\n")] = '\0';
-					} else {
-						flushInput();
-					}
+					safeFgets(perm, PERM_SIZE);
 				}
 				
 				send(s_sock, username, USR_SIZE, 0); // invia username al server
@@ -136,14 +114,10 @@ int main(int argc, char *argv[]){
 				memset(password, 0, PWD_SIZE);
 				
 				printf("%s", "Inserisci username: ");
-				alarm(TIMER);
-				fgets(username, USR_SIZE, stdin);
-				username[strcspn(username, "\n")] = '\0';
+				safeFgets(username, USR_SIZE);
 				
 				printf("%s", "Inserisci password: ");
-				alarm(TIMER);
-				fgets(password, PWD_SIZE, stdin);
-				password[strcspn(password, "\n")] = '\0';
+				safeFgets(password, PWD_SIZE);
 				
 				send(s_sock, username, USR_SIZE, 0); // invia username al server
 				send(s_sock, password, PWD_SIZE, 0); // invia password al server
@@ -167,8 +141,7 @@ int main(int argc, char *argv[]){
 	
 	printf("Benvenuto %s!\n", username);
 	printf("%s", "Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
-	scanf("%d", &choice);
-	flushInput();
+	safeScanf(&choice);
 	
 	while (choice != 3){
 		switch (choice){
@@ -180,9 +153,7 @@ int main(int argc, char *argv[]){
 				if (answer){
 					char buffer[BUF_SIZE];
 					printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome Numero'\n");
-					
-					alarm(TIMER);
-					fgets(buffer, BUF_SIZE, stdin);
+					safeFgets(buffer, BUF_SIZE);
 					
 					send(s_sock, buffer, BUF_SIZE, 0);
 					memset(buffer, 0, BUF_SIZE);
@@ -202,13 +173,11 @@ int main(int argc, char *argv[]){
 				if (answer){
 					char buffer[BUF_SIZE];
 					printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome'\n");
-					
-					alarm(TIMER);
-					fgets(buffer, BUF_SIZE, stdin);
+					safeFgets(buffer, BUF_SIZE);
 					
 					send(s_sock, buffer, BUF_SIZE, 0);
-					// il server invia il contatto e numero
 					memset(buffer, 0, BUF_SIZE);
+					// il server invia il contatto e numero
 					handle(recv(s_sock, buffer, BUF_SIZE, 0), s_sock, CLIENT);
 					printf("%s", buffer);
 				} else {
@@ -219,8 +188,7 @@ int main(int argc, char *argv[]){
 				puts("Scelta non valida");
 		}
 		printf("%s", "Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
-		scanf("%d", &choice);
-		flushInput();
+		safeScanf(&choice);
 	}
 	
 	net_choice = htonl(choice);

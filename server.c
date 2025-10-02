@@ -14,8 +14,6 @@
 #include "user.h"
 #include "contact.h"
 
-#define LISTENQ (8)
-
 pthread_mutex_t r_mutex;
 pthread_mutex_t up_mutex;
 int l_sock; // listen socket
