@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <string.h>
+#include <signal.h>
 
 #include "helper.h"
 #include "user.h"
@@ -17,18 +18,22 @@
 
 pthread_mutex_t r_mutex;
 pthread_mutex_t up_mutex;
+int l_sock; // listen socket
 
 void *clientThread(void *arg); // avvio thread
+void interruptHandler(int sig);
 
 int parseCmdLine(int argc, char *argv[], char **sPort);
 bool checkPermission(char *username, char *perm);
 
 int main(int argc, char *argv[]){
-	pthread_mutex_init(&r_mutex, NULL); // inizializza mutex per lettura/scrittura su rubrica
-	pthread_mutex_init(&up_mutex, NULL); // mutex per login/registra utenti
-	int l_sock, c_sock; // listen socket e client socket
 	struct sockaddr_in server;
 	struct sockaddr_in client;
+	int c_sock; // client socket
+	
+	pthread_mutex_init(&r_mutex, NULL); // inizializza mutex per lettura/scrittura su rubrica
+	pthread_mutex_init(&up_mutex, NULL); // mutex per login/registra utenti
+	signal(SIGINT, interruptHandler);
 	
 	char *sPort; // porta su cui il server ascolta
 	parseCmdLine(argc, argv, &sPort); // acquisizione porta passata come argomento da linea di comando
@@ -225,5 +230,11 @@ int parseCmdLine(int argc, char *argv[], char **sPort) {
 	}
 	
 	return 0;
+}
+
+void interruptHandler(int sig){
+	puts("Server interrotto, chiusura connessione");
+	close(l_sock);
+	exit(0);
 }
 

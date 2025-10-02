@@ -8,5 +8,5 @@
 #define CLIENT (1)
 
 void handle(int res, int sock, int who);
-// void flushStdin()
-// void checkInput(fgets(...))
+void flushInput();
+void checkInput(char *input);

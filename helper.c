@@ -27,13 +27,18 @@ void handle(int res, int sock, int who){
 	}
 }
 
-/*
-void flushStdin(){
- char c;
- while((c = getchar() != '\n') && c != EOF);
+void flushInput(){
+	char c;
+	while ( (c = getchar() != '\n') && c != EOF);
 }
 
-void checkInput(fgets){
- 
+void checkInput(char *input){
+	if (input == NULL){
+		puts("Errore nella scrittura o fine del file");
+		pthread_exit(NULL);
+	}
 }
-*/
+
+
+
+

@@ -8,15 +8,24 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <string.h>
+#include <signal.h>
 
 #include "helper.h"
 
+#define TIMER 30
+
 int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort);
+void timeout(int sig);
+void interruptHandler(int sig);
+
+int s_sock;
 
 int main(int argc, char *argv[]){
-	int s_sock;
 	struct sockaddr_in server;
 	struct hostent *hp;
+	
+	signal(SIGALRM, timeout); // timer di inattività
+	signal(SIGINT, interruptHandler);
 	
 	char *sAddr, *sPort, *end;
 	parseCmdLine(argc, argv, &sAddr, &sPort);
@@ -60,8 +69,11 @@ int main(int argc, char *argv[]){
 	// scegliere se loggare o registrarsi
 	while (res != 0){
 		printf("%s", "Scegliere se:\n1. Registrarti\n2. Loggarti\n");
+		
+		alarm(TIMER);
 		scanf("%d", &choice);
-		while (getchar() != '\n'); // fflush stdin
+		flushInput();
+		
 		net_choice = htonl(choice);
 		send(s_sock, &net_choice, sizeof(net_choice), 0);
 		switch (choice){
@@ -72,30 +84,34 @@ int main(int argc, char *argv[]){
 				memset(perm, 0, PERM_SIZE);
 				
 				printf("%s", "Inserisci username: ");
+				alarm(TIMER);
 				fgets(username, USR_SIZE, stdin);
 				username[strcspn(username, "\n")] = '\0';
 				
 				printf("%s", "Inserisci password: ");
+				alarm(TIMER);
 				fgets(password, PWD_SIZE, stdin);
 				password[strcspn(password, "\n")] = '\0';
 				
 				printf("%s", "Inserisci un permesso tra:\nlettura - 'r'\nscrittura - 'w'\nlettura e scrittura - 'rw'\n");
+				alarm(TIMER);
 				fgets(perm, PERM_SIZE, stdin);
 				if (strchr(perm, '\n') != NULL){
 					perm[strcspn(perm, "\n")] = '\0';
 				} else {
-					while(getchar() != '\n');
+					flushInput();
 				}
 				
 				while (strcmp(perm, "r") != 0 && strcmp(perm, "w") != 0 && strcmp(perm, "rw") != 0){
 					// controllo se non scrive r, w, o rw
 					memset(perm, 0, PERM_SIZE);
 					printf("%s", "Inserisci un permesso tra:\nlettura - 'r'\nscrittura - 'w'\nlettura e scrittura - 'rw'\n");
+					alarm(TIMER);
 					fgets(perm, PERM_SIZE, stdin);
 					if (strchr(perm, '\n') != NULL){
 						perm[strcspn(perm, "\n")] = '\0';
 					} else {
-						while(getchar() != '\n');
+						flushInput();
 					}
 				}
 				
@@ -120,10 +136,12 @@ int main(int argc, char *argv[]){
 				memset(password, 0, PWD_SIZE);
 				
 				printf("%s", "Inserisci username: ");
+				alarm(TIMER);
 				fgets(username, USR_SIZE, stdin);
 				username[strcspn(username, "\n")] = '\0';
 				
 				printf("%s", "Inserisci password: ");
+				alarm(TIMER);
 				fgets(password, PWD_SIZE, stdin);
 				password[strcspn(password, "\n")] = '\0';
 				
@@ -150,7 +168,7 @@ int main(int argc, char *argv[]){
 	printf("Benvenuto %s!\n", username);
 	printf("%s", "Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
 	scanf("%d", &choice);
-	while (getchar() != '\n'); // fflush stdin
+	flushInput();
 	
 	while (choice != 3){
 		switch (choice){
@@ -162,7 +180,10 @@ int main(int argc, char *argv[]){
 				if (answer){
 					char buffer[BUF_SIZE];
 					printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome Numero'\n");
+					
+					alarm(TIMER);
 					fgets(buffer, BUF_SIZE, stdin);
+					
 					send(s_sock, buffer, BUF_SIZE, 0);
 					memset(buffer, 0, BUF_SIZE);
 					// risposta dal sever di successo o fallimento
@@ -181,9 +202,11 @@ int main(int argc, char *argv[]){
 				if (answer){
 					char buffer[BUF_SIZE];
 					printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome'\n");
-					fgets(buffer, BUF_SIZE, stdin);
-					send(s_sock, buffer, BUF_SIZE, 0);
 					
+					alarm(TIMER);
+					fgets(buffer, BUF_SIZE, stdin);
+					
+					send(s_sock, buffer, BUF_SIZE, 0);
 					// il server invia il contatto e numero
 					memset(buffer, 0, BUF_SIZE);
 					handle(recv(s_sock, buffer, BUF_SIZE, 0), s_sock, CLIENT);
@@ -197,7 +220,7 @@ int main(int argc, char *argv[]){
 		}
 		printf("%s", "Scegliere:\n1. Aggiungere contatto\n2. Cercare contatto\n3. Uscire\n");
 		scanf("%d", &choice);
-		while (getchar() != '\n'); // fflush stdin
+		flushInput();
 	}
 	
 	net_choice = htonl(choice);
@@ -225,4 +248,23 @@ int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort){
 
 	return 0;
 }
+
+void timeout(int sig){
+	puts("Sei stato inattivo troppo tempo, chiusura connessione");
+	close(s_sock);
+	exit(0);
+}
+
+void interruptHandler(int sig){
+	puts("Client interrotto, chiusura connessione");
+	close(s_sock);
+	exit(0);
+}
+
+
+
+
+
+
+
 
