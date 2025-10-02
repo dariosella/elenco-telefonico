@@ -36,9 +36,9 @@ void flushInput(){
 void safeFgets(char *buffer, size_t size){
     alarm(TIMER);
     if (fgets(buffer, size, stdin) == NULL) {
-    	alarm(0);
-		   puts("Errore nella scrittura o fine del file");
-		   exit(0);
+     alarm(0);
+     puts("Errore nella scrittura o fine del file");
+     exit(0);
     }
     
     alarm(0);
