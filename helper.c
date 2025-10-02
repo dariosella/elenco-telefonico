@@ -56,7 +56,6 @@ void safeScanf(int *val){
 	if (scanf("%d", val) == 1){
 		alarm(0);
 		flushInput();
-		
 		return;
 	} else {
 		alarm(0);
