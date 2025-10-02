@@ -30,7 +30,7 @@ void handle(int res, int sock, int who){
 
 void flushInput(){
 	char c;
-	while ( (c = getchar() != '\n') && c != EOF);
+	while ( (c = getchar()) != '\n' && c != EOF);
 }
 
 void safeFgets(char *buffer, size_t size){
