@@ -16,6 +16,9 @@ int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort);
 void timeout(int sig);
 void interruptHandler(int sig);
 
+void search();
+void add();
+
 int s_sock; // socket di connessione al server
 
 int main(int argc, char *argv[]){
@@ -151,18 +154,9 @@ int main(int argc, char *argv[]){
 				// il server mi dice se ho i permessi necessari
 				handle(recv(s_sock, &answer, sizeof(answer), 0), s_sock, CLIENT);
 				if (answer){
-					char buffer[BUF_SIZE];
-					printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome Numero'\n");
-					safeFgets(buffer, BUF_SIZE);
-					
-					send(s_sock, buffer, BUF_SIZE, 0);
-					memset(buffer, 0, BUF_SIZE);
-					// risposta dal sever di successo o fallimento
-					handle(recv(s_sock, buffer, BUF_SIZE, 0), s_sock, CLIENT);
-					printf("%s", buffer);
-					
+					search();
 				} else {
-					puts("Non hai i permessi necessari per aggiungere il contatto");
+					puts("Non hai i permessi necessari per aggiungere contatti");
 				}
 				break;
 			case 2:
@@ -171,17 +165,9 @@ int main(int argc, char *argv[]){
 				// il server mi dice se ho i permessi necessari
 				handle(recv(s_sock, &answer, sizeof(answer), 0), s_sock, CLIENT);
 				if (answer){
-					char buffer[BUF_SIZE];
-					printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome'\n");
-					safeFgets(buffer, BUF_SIZE);
-					
-					send(s_sock, buffer, BUF_SIZE, 0);
-					memset(buffer, 0, BUF_SIZE);
-					// il server invia il contatto e numero
-					handle(recv(s_sock, buffer, BUF_SIZE, 0), s_sock, CLIENT);
-					printf("%s", buffer);
+					add();
 				} else {
-					puts("Non hai i permessi necessari per cercare il contatto");
+					puts("Non hai i permessi necessari per cercare contatti");
 				}
 				break;
 			default:
@@ -229,10 +215,27 @@ void interruptHandler(int sig){
 	exit(0);
 }
 
+void search(){
+	char buffer[BUF_SIZE];
+	printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome Numero'\n");
+	safeFgets(buffer, BUF_SIZE);
+	
+	send(s_sock, buffer, BUF_SIZE, 0);
+	memset(buffer, 0, BUF_SIZE);
+	// risposta dal sever di successo o fallimento
+	handle(recv(s_sock, buffer, BUF_SIZE, 0), s_sock, CLIENT);
+	printf("%s", buffer);
+}
 
-
-
-
-
-
+void add(){
+	char buffer[BUF_SIZE];
+	printf("%s", "Inserisci 'Nome [Nomi secondari] Cognome'\n");
+	safeFgets(buffer, BUF_SIZE);
+	
+	send(s_sock, buffer, BUF_SIZE, 0);
+	memset(buffer, 0, BUF_SIZE);
+	// risposta dal server con contatto e numero in caso di successo
+	handle(recv(s_sock, buffer, BUF_SIZE, 0), s_sock, CLIENT);
+	printf("%s", buffer);
+}
 
