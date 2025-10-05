@@ -97,7 +97,7 @@ void searchContact(Contact *contatto, char *answer){
 			if (temp == NULL){
 				perror("malloc");
 				strcpy(answer, "Errore di memoria insufficente\n");
-    close(fd);
+                close(fd);
 				return; // errore
 			}
 			
