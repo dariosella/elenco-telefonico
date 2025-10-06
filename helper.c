@@ -20,6 +20,7 @@ void handle(int res, int sock, int who){
 	} else if (res == -1){
 		// errore
 		perror("recv");
+  close(sock);
 		if (who == SERVER){
 			pthread_exit(NULL);
 		} else if (who == CLIENT){
