@@ -48,7 +48,6 @@ void safeFgets(char *buffer, size_t size){
     	flushInput();
     }
     
-    return;
 }
 
 void safeScanf(int *val){
