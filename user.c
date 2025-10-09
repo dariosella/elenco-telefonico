@@ -5,13 +5,17 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
-#include <stdbool.h>
 
 int usrLogin(User *utente){
+	if (utente == NULL){
+		puts("usrLogin args NULL");
+		return -1;
+	}
+	
 	// ogni riga di users è "username password\n"
 	int fd = open("utenti", O_RDONLY);
 	if (fd == -1){
-		perror("open");
+		perror("open utenti");
 		return -1;
 	}
 	
@@ -19,7 +23,8 @@ int usrLogin(User *utente){
 	
 	int i = 0;
 	char c;
-	while (read(fd, &c, 1) == 1){
+	int r = 0;
+	while ( (r = safeRead(fd, &c, 1)) == 1){
 		// leggo un carattere alla volta
 		buffer[i++] = c;
 		if (c == '\n'){
@@ -34,7 +39,7 @@ int usrLogin(User *utente){
 					return 0; // utente riconosciuto
 				} else if (strcmp(username, utente->usr) == 0 && strcmp(password, utente->pwd) != 0){
 					close(fd);
-					return 1; // password sbagliata
+					return -2; // password sbagliata
 				}
 			}
 			
@@ -43,23 +48,41 @@ int usrLogin(User *utente){
 		}
 	}
 	
+	if (r == -1){
+		perror("read utenti");
+		return -1;
+	}
+	
 	close(fd);
-	return 2; // utente non esiste
+	return -3; // utente non esiste
 }
 
 int usrRegister(User *utente, char *perm){
+	if (utente == NULL || perm == NULL){
+		puts("usrRegister args NULL");
+		return -1;
+	}
+	
 	int fd = open("utenti", O_CREAT | O_RDWR | O_APPEND, 0600);
+	if (fd == -1){
+		perror("open utenti");
+		return -1;
+	}
+	
 	int fd2 = open("permessi", O_CREAT | O_WRONLY | O_APPEND, 0600);
-	if (fd == -1 || fd2 == -1){
-		perror("open");
+	if (fd2 == -1){
+		perror("open permessi");
+		close(fd);
 		return -1;
 	}
 	
 	char buffer[BUF_SIZE];
 	int i = 0;
 	char c;
-	// controllo se lo username è già utilizzato
-	while (read(fd, &c, 1) == 1){
+	int r = 0;
+	
+	// CHECK USERNAME GIÀ UTILIZZATO
+	while ((r = safeRead(fd, &c, 1)) == 1){
 		// leggo un carattere alla volta
 		buffer[i++] = c;
 		if (c == '\n'){
@@ -68,11 +91,11 @@ int usrRegister(User *utente, char *perm){
 			char *username = strtok(buffer, " \n");
 			char *password = strtok(NULL, " \n");
 			
-			if (username != NULL){
+			if (username != NULL && utente->usr != NULL){
 				if (strcmp(username, utente->usr) == 0){
 					close(fd);
 					close(fd2);
-					return 1; // username già utilizzato
+					return -2; // username già utilizzato
 				}
 			}
 			
@@ -81,33 +104,56 @@ int usrRegister(User *utente, char *perm){
 		}
 	}
 	
+	if (r == -1){
+		perror("read utenti");
+		close(fd);
+		close(fd2);
+		return -1;
+	}
+	
 	// scrittura "username password\n" sul file utenti
 	memset(buffer, 0, BUF_SIZE);
 	snprintf(buffer, BUF_SIZE, "%s %s\n", utente->usr, utente->pwd);
-	write(fd, buffer, strlen(buffer));
+	if (safeWrite(fd, buffer, strlen(buffer)) == -1){
+		perror("write utenti");
+		close(fd);
+		close(fd2);
+		return -1;
+	}
 	
 	// scrittura "username permission\n" sul file permessi
 	memset(buffer, 0, BUF_SIZE);
 	snprintf(buffer, BUF_SIZE, "%s %s\n", utente->usr, perm);
-	write(fd2, buffer, strlen(buffer));
+	if (safeWrite(fd2, buffer, strlen(buffer)) == -1){
+		perror("write permessi");
+		close(fd);
+		close(fd2);
+		return -1;
+	}
 	
 	close(fd);
 	close(fd2);
 	return 0; // utente registrato
 }
 
-bool checkPermission(char *username, char *perm){
+int checkPermission(char *username, char *perm){
+	if (username == NULL || perm == NULL){
+		puts("checkPermission args NULL");
+		return -1;
+	}
+
 	// ogni riga di permission è "username permission\n"
 	int fd = open("permessi", O_RDONLY);
 	if (fd == -1){
-		perror("open");
-		return false;
+		perror("open permessi");
+		return -1;
 	}
 	
 	char buffer[BUF_SIZE];
 	int i = 0;
 	char c;
-	while (read(fd, &c, 1) == 1){
+	int r = 0;
+	while ((r = safeRead(fd, &c, 1)) == 1){
 		buffer[i++] = c;
 		if (c == '\n'){
 			// ho letto una riga "username permission\n"
@@ -119,10 +165,10 @@ bool checkPermission(char *username, char *perm){
 					if (strstr(buffer_perm, perm) != NULL) {
 						// l'utente ha il permesso
 						close(fd);
-						return true;
+						return 1; // true
 					} else {
 						close(fd);
-						return false;
+						return 0; // false
 					}
 				}
 			}
@@ -132,7 +178,13 @@ bool checkPermission(char *username, char *perm){
 		}
 	}
 	
+	if (r == -1){
+		perror("read permessi");
+		close(fd);
+		return -1;
+	}
+	
 	close(fd);
-	return false;
+	return 0; // false
 }
 

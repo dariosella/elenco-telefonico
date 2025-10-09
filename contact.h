@@ -6,5 +6,5 @@ typedef struct {
 } Contact;
 
 Contact *createContact(char *buffer);
-void addContact(Contact *contatto, char *answer);
-void searchContact(Contact *contatto, char *answer);
+int addContact(Contact *contatto, char *answer);
+int searchContact(Contact *contatto, char *answer);

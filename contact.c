@@ -6,11 +6,11 @@
 #include <string.h>
 #include <fcntl.h>
 
+// CREA UN CONTATTO
 Contact *createContact(char *buffer){
-	// funzione per la creazione di un nuovo contatto da inserire o cercare
 	Contact *contatto = malloc(sizeof(Contact));
 	if (contatto == NULL){
-		perror("malloc");
+		perror("malloc contact");
 		return NULL;
 	}
 	
@@ -40,65 +40,70 @@ Contact *createContact(char *buffer){
 	return contatto;
 }
 
-void addContact(Contact *contatto, char *answer){
-	// funzione per l'aggiunta di un nuovo contatto alla fine della rubrica
-	int fd = open("rubrica", O_CREAT | O_WRONLY | O_APPEND, 0600);
-	if (fd == -1){
-		perror("open");
-		strcpy(answer, "Errore nell'apertura della rubrica\n");
-		return; // errore
+// AGGIUNGI UN CONTATTO IN RUBRICA
+int addContact(Contact *contatto, char *answer){
+	if (contatto == NULL || answer == NULL){
+		puts("addContact args NULL");
+		return -1;
 	}
 	
-	// controllo che l'utente abbia inserito sia il nome che il numero
+	int fd = open("rubrica", O_CREAT | O_WRONLY | O_APPEND, 0600);
+	if (fd == -1){
+		perror("open rubrica");
+		return -1;
+	}
+	
 	if (contatto->name[0] == '\0' || contatto->number[0] == '\0'){
 		strcpy(answer, "Nome o Numero non inseriti\n");
 		close(fd);
-		return;
+		return 0;
 	}
 	
 	char buffer[BUF_SIZE];
 	snprintf(buffer, BUF_SIZE, "%s %s\n", contatto->name, contatto->number);
 	
-	// controllo se contatto già esiste
 	char temp[BUF_SIZE];
 	searchContact(contatto, temp);
 	if (strcmp(buffer, temp) == 0){
-		// se il contatto già esiste
 		strcpy(answer, "Il contatto già esiste\n");
 		close(fd);
-		return;
+		return 0;
 	}
-	write(fd, buffer, strlen(buffer));
+	if (safeWrite(fd, buffer, strlen(buffer)) == -1){
+		perror("write rubrica");
+		close(fd);
+		return -1;
+	}
 	
 	strcpy(answer, "Il contatto è stato aggiunto con successo\n");
 	close(fd);
-	return; // contatto aggiunto
+	return 0;
 }
 
-void searchContact(Contact *contatto, char *answer){
+// CERCA UN CONTATTO IN RUBRICA
+int searchContact(Contact *contatto, char *answer){
 	int fd = open("rubrica", O_RDONLY);
 	if (fd == -1){
-		perror("open");
-		strcpy(answer, "Errore nell'apertura della rubrica\n");
-		return;
+		perror("open rubrica");
+		return -1;
 	}
 
 	char buffer[BUF_SIZE];
 	int i = 0;
 	char c;
-
-	while (read(fd, &c, 1) == 1){
-		buffer[i++] = c;\
+	int r = 0;
+	
+	while ((r = safeRead(fd, &c, 1)) == 1){
+		buffer[i++] = c;
 		if (c == '\n'){
 			buffer[i] = '\0';
 			
 			// temp contiene il contatto preso dalla rubrica
 			Contact *temp = createContact(buffer);
 			if (temp == NULL){
-				perror("malloc");
-				strcpy(answer, "Errore di memoria insufficente\n");
-                close(fd);
-				return; // errore
+				perror("malloc contact");
+				close(fd);
+				return -1;
 			}
 			
 			if (strcmp(temp->name, contatto->name) == 0){
@@ -108,7 +113,7 @@ void searchContact(Contact *contatto, char *answer){
 				
 				free(temp);
 				close(fd);
-				return;
+				return 0;
 			}
 
 			free(temp);
@@ -119,6 +124,6 @@ void searchContact(Contact *contatto, char *answer){
 	
 	strcpy(answer, "Il contatto non esiste\n"); // contatto non trovato
 	close(fd);
-	return;
+	return 0;
 }
 

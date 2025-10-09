@@ -3,68 +3,90 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <pthread.h>
 #include <string.h>
+#include <errno.h>
+#include <sys/socket.h>
 
-void handle(int res, int sock, int who){
-	if (res == 0){
-		// la connessione è stata chiusa
-		close(sock);
-		if (who == SERVER){
-			puts("Connessione chiusa");
-			pthread_exit(NULL);
-		} else if (who == CLIENT){
-			puts("Connessione chiusa");
-			exit(EXIT_SUCCESS);
+ssize_t safeRecv(int sfd, void *buffer, size_t size, int flags){
+	ssize_t total = 0;
+	char *ptr = buffer;
+
+	while (total < size){
+		ssize_t r = recv(sfd, ptr + total, size - total, flags);
+		if (r == -1){
+			if (errno == EINTR){
+				continue; // riprova
+			} else if (errno == EAGAIN || errno == EWOULDBLOCK){
+				return -2; // timeout
+			}
+			else {
+				return -1; // errore
+			}
+		} else if (r == 0){
+			return -3; // connessione chiusa
 		}
-	} else if (res == -1){
-		// errore
-		perror("recv");
-  close(sock);
-		if (who == SERVER){
-			pthread_exit(NULL);
-		} else if (who == CLIENT){
-			exit(EXIT_FAILURE);
+		total += r;
+	}
+	return total;
+}
+
+ssize_t safeSend(int sfd, const void *buffer, size_t size, int flags){
+	ssize_t total = 0;
+	const char *ptr = buffer;
+	
+	while (total < size){
+		ssize_t r = send(sfd, ptr + total, size - total, flags);
+		if (r == -1){
+			if (errno == EINTR){
+				continue; // riprova
+			} else if (errno == EPIPE){
+				return -3; // connessione chiusa
+			} else if (errno == EAGAIN || errno == EWOULDBLOCK){
+				return -2; // timeout
+			} else {
+				return -1; // errore
+			}
 		}
+		total += r;
 	}
+	return total;
 }
 
-void flushInput(){
-	char c;
-	while ( (c = getchar()) != '\n' && c != EOF);
-}
-
-void safeFgets(char *buffer, size_t size){
-    alarm(TIMER);
-    if (fgets(buffer, size, stdin) == NULL) {
-           alarm(0);
-           puts("Errore nella scrittura o fine del file");
-           exit(0);
-    }
-    
-    alarm(0);
-    if (strchr(buffer, '\n') != NULL){
-    	buffer[strcspn(buffer, "\n")] = '\0';
-    } else {
-    	flushInput();
-    }
-    
-}
-
-void safeScanf(int *val){
-	alarm(TIMER);
-	if (scanf("%d", val) == 1){
-		alarm(0);
-		flushInput();
-		return;
-	} else {
-		alarm(0);
-		puts("Input non valido");
-		flushInput();
-		exit(0);
+ssize_t safeRead(int fd, void *buffer, size_t size){
+	ssize_t total = 0;
+	char *ptr = buffer;
+	
+	while (total < size){
+		ssize_t r = read(fd, ptr + total, size - total);
+		if (r == -1){
+			if (errno == EINTR){
+				continue; // riprova
+			} else {
+				return -1; // errore
+			}
+		} else if (r == 0){
+			break; // EOF
+		}
+		total += r;
 	}
+	return total;
 }
 
-
-
+ssize_t safeWrite(int fd, const void *buffer, size_t size){
+	ssize_t total = 0;
+	const char *ptr = buffer;
+	
+	while (total < size){
+		ssize_t r = write(fd, ptr + total, size - total);
+		if (r == -1){
+			if (errno == EINTR){
+				continue; // riprova
+			} else {
+				return -1; // errore
+			}
+		}
+		total += r;
+	}
+	return total;
+}
 
