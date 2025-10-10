@@ -89,40 +89,40 @@ int searchContact(Contact *contatto, char *answer){
 	}
 
 	char buffer[BUF_SIZE];
-	int i = 0;
-	char c;
-	int r = 0;
+	ssize_t r = 0;
 	
-	while ((r = safeRead(fd, &c, 1)) == 1){
-		buffer[i++] = c;
-		if (c == '\n'){
-			buffer[i] = '\0';
-			
-			// temp contiene il contatto preso dalla rubrica
-			Contact *temp = createContact(buffer);
-			if (temp == NULL){
-				perror("malloc contact");
-				close(fd);
-				return -1;
-			}
-			
-			if (strcmp(temp->name, contatto->name) == 0){
-				strcpy(contatto->number, temp->number);
-				
-				snprintf(answer, BUF_SIZE, "%s %s\n", contatto->name, contatto->number); // contatto trovato
-				
-				free(temp);
-				close(fd);
-				return 0;
-			}
-
-			free(temp);
-			memset(buffer, 0, BUF_SIZE);
-			i = 0;
+	while ( (r = readLine(fd, buffer, BUF_SIZE)) > 0){
+		Contact *temp = createContact(buffer);
+		if (temp == NULL){
+			perror("malloc contact");
+			close(fd);
+			return -1;
 		}
+		
+		if (strcmp(temp->name, contatto->name) == 0){
+			strcpy(contatto->number, temp->number);
+			snprintf(answer, BUF_SIZE, "%s %s\n", contatto->name, contatto->number); // trovato
+			
+			free(temp);
+			close(fd);
+			return 0;
+		}
+		
+		free(temp);
+		memset(buffer, 0, BUF_SIZE);
 	}
 	
-	strcpy(answer, "Il contatto non esiste\n"); // contatto non trovato
+	if (r == -1){
+		puts("read rubrica");
+		close(fd);
+		return -1;
+	} else if (r == -2){
+		puts("rubrica overflow");
+		close(fd);
+		return -1;
+	}
+	
+	strcpy(answer, "Il contatto non esiste\n"); // non trovato
 	close(fd);
 	return 0;
 }

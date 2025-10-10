@@ -90,3 +90,30 @@ ssize_t safeWrite(int fd, const void *buffer, size_t size){
 	return total;
 }
 
+ssize_t readLine(int fd, char *line, size_t size) {
+    size_t i = 0;
+    ssize_t r;
+    char c;
+
+    while (i < size - 1) {
+        r = safeRead(fd, &c, 1);
+        if (r == 1) {
+            line[i++] = c;
+            if (c == '\n') {
+                line[i] = '\0';
+                return i; // OK
+            }
+        } else if (r == 0) {
+            // EOF
+            line[i] = '\0';
+            return i;
+        } else {
+            perror("read");
+            return -1;
+        }
+    }
+    
+    line[size - 1] = '\0';
+    return -2; // linea troppo lunga
+}
+

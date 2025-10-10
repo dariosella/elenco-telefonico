@@ -38,6 +38,7 @@ void handleInputReturn(ssize_t ret);
 void handleSendReturn(ssize_t ret);
 void handleRecvReturn(ssize_t ret);
 void handleNewline(char *buf);
+void flushInput(unsigned int seconds);
 
 int main(int argc, char *argv[]){
 	struct sockaddr_in server;
@@ -48,11 +49,13 @@ int main(int argc, char *argv[]){
 	char *sAddr = NULL, *sPort = NULL, *end = NULL;
 	parseCmdLine(argc, argv, &sAddr, &sPort);
 	
-	int port = strtol(sPort, &end, 10);
-	if (*end != '\0' || port < 1 || port > 65535){
+	long lport = strtol(sPort, &end, 10);
+	if (*end != '\0' || lport < 1 || lport > 65535){
 		puts("porta non riconosciuta");
 		exit(EXIT_FAILURE);
 	}
+	
+	uint16_t port = lport;
 	
 	if ( (c_sock = socket(AF_INET, SOCK_STREAM, 0) ) < 0){
 		perror("socket");
@@ -322,52 +325,47 @@ void signalSetup(){
   // SIGALRM
   memset(&sa, 0, sizeof(sa));
   sa.sa_handler = alarmHandler;
-  sigemptyset(&sa.sa_mask);     // nessun segnale bloccato durante la gestione
+  sigemptyset(&sa.sa_mask);
   sa.sa_flags = 0;
   if (sigaction(SIGALRM, &sa, NULL) == -1) { perror("sigaction SIGALRM"); exit(EXIT_FAILURE); }
 	
-  // SIGINT
+  // SIGINT, SIGTERM, SIGHUP, SIGQUIT
   memset(&sa, 0, sizeof(sa));
   sa.sa_handler = interruptHandler;
   sigemptyset(&sa.sa_mask);
   sigaddset(&sa.sa_mask, SIGALRM); // blocca SIGALRM
   sa.sa_flags = 0;
-  if (sigaction(SIGINT, &sa, NULL) == -1) { perror("sigaction SIGINT"); exit(EXIT_FAILURE); }
+  if (sigaction(SIGINT, &sa, NULL) == -1){ 
+  	perror("sigaction SIGINT"); 
+  	exit(EXIT_FAILURE); 
+  }
+	if (sigaction(SIGTERM, &sa, NULL) == -1){ 
+		perror("sigaction SIGTERM");
+		exit(EXIT_FAILURE);
+	}
+	if (sigaction(SIGHUP, &sa, NULL) == -1){
+		perror("sigaction SIGHUP");
+		exit(EXIT_FAILURE);
+	}
+	if (sigaction(SIGQUIT, &sa, NULL) == -1){
+		perror("sigaction SIGQUIT");
+		exit(EXIT_FAILURE);
+	}
 		
   // SIGPIPE
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = SIG_IGN;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
-	if (sigaction(SIGPIPE, &sa, NULL) == -1) { perror("sigaction SIGPIPE"); exit(EXIT_FAILURE); }
-	
-	// SIGTERM
-	memset(&sa, 0, sizeof(sa));
-	sa.sa_handler = interruptHandler;
-	sigemptyset(&sa.sa_mask);
-	sigaddset(&sa.sa_mask, SIGALRM); // blocca SIGALRM
-	sa.sa_flags = 0;
-	if (sigaction(SIGTERM, &sa, NULL) == -1) { perror("sigaction SIGTERM"); exit(EXIT_FAILURE); }
-
-	// SIGHUP
-	memset(&sa, 0, sizeof(sa));
-	sa.sa_handler = interruptHandler;
-	sigemptyset(&sa.sa_mask);
-	sigaddset(&sa.sa_mask, SIGALRM); // blocca SIGALRM
-	sa.sa_flags = 0;
-	if (sigaction(SIGHUP, &sa, NULL) == -1) { perror("sigaction SIGHUP"); exit(EXIT_FAILURE); }
-
-	// SIGQUIT
-	memset(&sa, 0, sizeof(sa));
-	sa.sa_handler = SIG_IGN;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = 0;
-	if (sigaction(SIGQUIT, &sa, NULL) == -1) { perror("sigaction SIGQUIT"); exit(EXIT_FAILURE); }
+	if (sigaction(SIGPIPE, &sa, NULL) == -1){
+		perror("sigaction SIGPIPE");
+		exit(EXIT_FAILURE);
+	}
 }
 
 int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort){
 	if (argc < 5){
-		printf("Usage: %s -a (indirizzo remoto) -p (porta remota) [-h]\n", argv[0]);
+		printf("Utilizzo: %s -a (indirizzo remoto) -p (porta remota) [-h]\n", argv[0]);
 		fflush(stdout);
 		exit(EXIT_FAILURE);
 	}
@@ -378,7 +376,7 @@ int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort){
 		} else if ((!strcmp(argv[i], "-p") || !strcmp(argv[i], "-P")) && i + 1 < argc){
 			*sPort = argv[i + 1];
 		} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "-H")){
-			printf("Usage: %s -a (indirizzo remoto) -p (porta remota) [-h]\n", argv[0]);
+			printf("Utilizzo: %s -a (indirizzo remoto) -p (porta remota) [-h]\n", argv[0]);
 			fflush(stdout);
 			exit(EXIT_SUCCESS);
 		}
@@ -393,41 +391,45 @@ int parseCmdLine(int argc, char *argv[], char **sAddr, char **sPort){
 }
 
 ssize_t safeInputAlarm(int fd, void *buffer, size_t size){
-	if (size == 0)
-		return 0;
+    if (size == 0)
+        return 0;
 
-	timeout_expired = 0;
-	alarm(TIMEOUT);
+    char *ptr = buffer;
+    size_t i = 0;
+    ssize_t r;
+    char c;
 
-	size_t total = 0;
-	char *ptr = buffer;
-	
-	// LASCIA SPAZIO PER '\0'
-	while (total < size - 1){
-		char c;
-		ssize_t r = read(fd, &c, 1);
-		
-		if (r == -1){
-			if (errno == EINTR && !timeout_expired){
-				continue; // riprova
-			} else {
-				alarm(0);
-				ptr[total] = '\0';
-				return timeout_expired ? -2 : -1; // timeout altrimenti errore
-			}
-		} else if (r == 0){
-			break; // EOF
-		}
-		
-		ptr[total++] = c;
-		
-		if (c == '\n')
-			break;
-	}
-	
-	alarm(0);
-	ptr[total] = '\0';
-	return total;
+    timeout_expired = 0;
+    alarm(TIMEOUT);
+
+    while (i < size - 1) {
+        r = read(fd, &c, 1);
+
+        if (r == 1) {
+            ptr[i++] = c;
+            if (c == '\n')
+                break; // fine riga
+        } 
+        else if (r == 0) {
+            // EOF
+            break;
+        } 
+        else if (r == -1) {
+            if (errno == EINTR && !timeout_expired)
+                continue; // riprova
+            else {
+                alarm(0);
+                ptr[i] = '\0';
+                return timeout_expired ? -2 : -1; // -2 timeout, -1 errore
+            }
+        }
+    }
+
+    alarm(0);
+    ptr[i] = '\0';
+
+    // ritorna numero di byte letti (escluso terminatore)
+    return i;
 }
 
 void handleNewline(char *buf){
@@ -435,15 +437,46 @@ void handleNewline(char *buf){
 	if (len == 0) return;
 	
 	if (strchr(buf, '\n') != NULL){
-		// RIMUOVI IL NEWLINE
 		buf[strcspn(buf, "\n")] = '\0';
 	} else {
-		// FLUSH INPUT
-		char c;
-		alarm(TIMEOUT);
-		while (safeRead(0, &c, 1) == 1 && c != '\n');
-		alarm(0);
+		flushInput(2);
+		puts("input troppo lungo");
+		close(c_sock);
+		exit(EXIT_FAILURE);
 	}
+}
+
+void flushInput(unsigned int seconds){
+	char c;
+	ssize_t r;
+	timeout_expired = 0;
+	alarm(seconds);
+  while (1) {
+		r = read(0, &c, 1);
+    if (r == 1) {
+			if (c == '\n')
+				break;
+    }
+    else if (r == 0) {
+			break; // EOF
+		} 
+    else if (r == -1) {
+    	if (errno == EINTR && !timeout_expired)
+				continue;
+      break; // errore o timeout
+    }
+	}
+  alarm(0);
+    
+  if (timeout_expired){
+  	puts("flush timeout");
+   	close(c_sock);
+   	exit(EXIT_FAILURE);
+  } else if (r == -1){
+  	perror("flush error");
+   	close(c_sock);
+   	exit(EXIT_FAILURE);
+  }
 }
 
 void handleInputReturn(ssize_t ret){
@@ -480,7 +513,7 @@ void handleRecvReturn(ssize_t ret){
       close(c_sock);
       exit(EXIT_FAILURE);
     } else if (ret == -2){
-    	puts("Timeout scaduto");
+    	puts("Tempo scaduto");
     	close(c_sock);
     	exit(EXIT_FAILURE);
     }

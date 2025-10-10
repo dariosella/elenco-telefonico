@@ -20,36 +20,32 @@ int usrLogin(User *utente){
 	}
 	
 	char buffer[BUF_SIZE];
+	ssize_t r = 0;
 	
-	int i = 0;
-	char c;
-	int r = 0;
-	while ( (r = safeRead(fd, &c, 1)) == 1){
-		// leggo un carattere alla volta
-		buffer[i++] = c;
-		if (c == '\n'){
-			// ho letto una riga: "username password\n"
-			buffer[i] = '\0';
-			char *username = strtok(buffer, " \n");
-			char *password = strtok(NULL, " \n");
-			
-			if (username != NULL && password != NULL){
-				if (strcmp(username, utente->usr) == 0 && strcmp(password, utente->pwd) == 0){
-					close(fd);
-					return 0; // utente riconosciuto
-				} else if (strcmp(username, utente->usr) == 0 && strcmp(password, utente->pwd) != 0){
-					close(fd);
-					return -2; // password sbagliata
-				}
+	while ( (r = readLine(fd, buffer, BUF_SIZE)) > 0){
+		char *username = strtok(buffer, " \n");
+		char *password = strtok(NULL, " \n");
+		
+		if (username != NULL && password != NULL){
+			if (strcmp(username, utente->usr) == 0 && strcmp(password, utente->pwd) == 0){
+				close(fd);
+				return 0; // utente riconosciuto
+			} else if (strcmp(username, utente->usr) == 0 && strcmp(password, utente->pwd) != 0){
+				close(fd);
+				return -2; // password sbagliata
 			}
-			
-			memset(buffer, 0, BUF_SIZE);
-			i = 0;
 		}
+		
+		memset(buffer, 0, BUF_SIZE);
 	}
 	
 	if (r == -1){
 		perror("read utenti");
+		close(fd);
+		return -1;
+	} else if (r == -2){
+		puts("utenti overflow");
+		close(fd);
 		return -1;
 	}
 	
@@ -77,35 +73,31 @@ int usrRegister(User *utente, char *perm){
 	}
 	
 	char buffer[BUF_SIZE];
-	int i = 0;
-	char c;
-	int r = 0;
+	ssize_t r = 0;
 	
 	// CHECK USERNAME GIÀ UTILIZZATO
-	while ((r = safeRead(fd, &c, 1)) == 1){
-		// leggo un carattere alla volta
-		buffer[i++] = c;
-		if (c == '\n'){
-			// ho letto una riga: "username password\n"
-			buffer[i] = '\0';
-			char *username = strtok(buffer, " \n");
-			char *password = strtok(NULL, " \n");
-			
-			if (username != NULL && utente->usr != NULL){
-				if (strcmp(username, utente->usr) == 0){
-					close(fd);
-					close(fd2);
-					return -2; // username già utilizzato
-				}
+	while ( (r = readLine(fd, buffer, BUF_SIZE)) > 0){
+		char *username = strtok(buffer, " \n");
+		char *password = strtok(NULL, " \n");
+		
+		if (username != NULL && utente->usr != NULL){
+			if (strcmp(username, utente->usr) == 0){
+				close(fd);
+				close(fd2);
+				return -2; // username già utilizzato
 			}
-			
-			memset(buffer, 0, BUF_SIZE);
-			i = 0;
 		}
+		
+		memset(buffer, 0, BUF_SIZE);
 	}
 	
 	if (r == -1){
 		perror("read utenti");
+		close(fd);
+		close(fd2);
+		return -1;
+	} else if (r == -2){
+		puts("utenti overflow");
 		close(fd);
 		close(fd2);
 		return -1;
@@ -150,14 +142,9 @@ int checkPermission(char *username, char *perm){
 	}
 	
 	char buffer[BUF_SIZE];
-	int i = 0;
-	char c;
-	int r = 0;
-	while ((r = safeRead(fd, &c, 1)) == 1){
-		buffer[i++] = c;
-		if (c == '\n'){
-			// ho letto una riga "username permission\n"
-			buffer[i] = '\0';
+	ssize_t r = 0;
+	
+	while ( (r = readLine(fd, buffer, BUF_SIZE)) > 0){
 			char *buffer_username = strtok(buffer, " \n");
 			char *buffer_perm = strtok(NULL, " \n");
 			if (buffer_username != NULL && buffer_perm != NULL){
@@ -174,12 +161,14 @@ int checkPermission(char *username, char *perm){
 			}
 			
 			memset(buffer, 0, BUF_SIZE);
-			i = 0;
-		}
 	}
 	
 	if (r == -1){
 		perror("read permessi");
+		close(fd);
+		return -1;
+	} else if (r == -2){
+		puts("permessi overflow");
 		close(fd);
 		return -1;
 	}

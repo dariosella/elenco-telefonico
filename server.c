@@ -29,19 +29,18 @@ void interruptHandler(int sig){
 		close(l_sock);
 	_exit(EXIT_SUCCESS);
 }
+
 void signalSetup();
-
 void *clientThread(void *arg);
-
 int parseCmdLine(int argc, char *argv[], char **sPort);
-void handleSendReturn(ssize_t ret, int *sock);
-void handleRecvReturn(ssize_t ret, int *sock);
+void handleSendReturn(ssize_t ret);
+void handleRecvReturn(ssize_t ret);
 
 int main(int argc, char *argv[]){
 	struct sockaddr_in server;
 	struct sockaddr_in client;
 	// SOCKET DI CONNESSIONE
-	int c_sock = -1;
+	int conn_sock = -1;
 	
 	// INIZIALIZZAZIONE MUTEX
 	pthread_mutex_init(&r_mutex, NULL);
@@ -89,10 +88,10 @@ int main(int argc, char *argv[]){
 	}
 	
 	pthread_t tid;
-	socklen_t c_size;
+	socklen_t conn_size;
 	while (1){
-		c_size = sizeof(client);
-		if ((c_sock = accept(l_sock, (struct sockaddr *)&client, &c_size)) < 0){
+		conn_size = sizeof(client);
+		if ((conn_sock = accept(l_sock, (struct sockaddr *)&client, &conn_size)) < 0){
 			if (errno == EINTR)
 				continue; // riprova
 			perror("accept");
@@ -106,30 +105,30 @@ int main(int argc, char *argv[]){
 		tv.tv_usec = 0;
 		
 		// TIMEOUT PER LA RICEZIONE
-		if (setsockopt(c_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0){
+		if (setsockopt(conn_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0){
 			perror("setsockopt SO_RCVTIMEO");
-			close(c_sock);
+			close(conn_sock);
 			continue;
 		}
 		
 		// TIMEOUT PER L'INVIO
-		if (setsockopt(c_sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0){
+		if (setsockopt(conn_sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0){
 			perror("setsockopt SO_SNDTIMEO");
-			close(c_sock);
+			close(conn_sock);
 			continue;
 		}
 		
-		int *c_sockptr = malloc(sizeof(int));
-		if (c_sockptr == NULL){
+		int *conn_sockptr = malloc(sizeof(int));
+		if (conn_sockptr == NULL){
 			perror("malloc c_sockptr");
 			continue;
 		}
-		*c_sockptr = c_sock; // copia separata da passare al thread
+		*conn_sockptr = conn_sock; // copia separata da passare al thread
 		
-		if (pthread_create(&tid, NULL, clientThread, (void *)c_sockptr) < 0){
+		if (pthread_create(&tid, NULL, clientThread, (void *)conn_sockptr) < 0){
 			perror("pthread_create");
-			close(c_sock);
-			free(c_sockptr);
+			close(conn_sock);
+			free(conn_sockptr);
 			continue;
 		}
 		
@@ -162,15 +161,15 @@ void *clientThread(void *arg){
 	
 	// SCELTA DEL CLIENT
 	while (res != 0){
-		handleRecvReturn(safeRecv(c_sock, &net_choice, sizeof(net_choice), 0), &c_sock);
+		handleRecvReturn(safeRecv(c_sock, &net_choice, sizeof(net_choice), 0));
 		choice = ntohl(net_choice);
 		switch (choice){
 			case 1:
 				// REGISTRAZIONE
 				// RICEVO USERNAME, PASSWORD, PERMESSO DAL CLIENT
-				handleRecvReturn(safeRecv(c_sock, c_user->usr, USR_SIZE, 0), &c_sock);
-				handleRecvReturn(safeRecv(c_sock, c_user->pwd, PWD_SIZE, 0), &c_sock);
-				handleRecvReturn(safeRecv(c_sock, perm, PERM_SIZE, 0), &c_sock);
+				handleRecvReturn(safeRecv(c_sock, c_user->usr, USR_SIZE, 0));
+				handleRecvReturn(safeRecv(c_sock, c_user->pwd, PWD_SIZE, 0));
+				handleRecvReturn(safeRecv(c_sock, perm, PERM_SIZE, 0));
 				
 				// SEZIONE CRITICA
 				pthread_mutex_lock(&u_mutex);
@@ -178,18 +177,18 @@ void *clientThread(void *arg){
 				pthread_mutex_unlock(&u_mutex);
 				
 				net_res = htonl(res);
-				handleSendReturn(safeSend(c_sock, &net_res, sizeof(net_res), 0), &c_sock);
+				handleSendReturn(safeSend(c_sock, &net_res, sizeof(net_res), 0));
 				break;
 			case 2:
 				// LOGIN
 				// RICEVO USERNAME E PASSWORD DAL CLIENT
-				handleRecvReturn(safeRecv(c_sock, c_user->usr, USR_SIZE, 0), &c_sock);
-				handleRecvReturn(safeRecv(c_sock, c_user->pwd, PWD_SIZE, 0), &c_sock);
+				handleRecvReturn(safeRecv(c_sock, c_user->usr, USR_SIZE, 0));
+				handleRecvReturn(safeRecv(c_sock, c_user->pwd, PWD_SIZE, 0));
 				
 				res = usrLogin(c_user);
 				
 				net_res = htonl(res);
-				handleSendReturn(safeSend(c_sock, &net_res, sizeof(net_res), 0), &c_sock);
+				handleSendReturn(safeSend(c_sock, &net_res, sizeof(net_res), 0));
 				break;
 			default:
 				break;
@@ -200,7 +199,7 @@ void *clientThread(void *arg){
 	uint8_t net_answer;
 	do {
 		// SCELTA DEL CLIENT
-		handleRecvReturn(safeRecv(c_sock, &net_choice, sizeof(net_choice), 0), &c_sock);
+		handleRecvReturn(safeRecv(c_sock, &net_choice, sizeof(net_choice), 0));
 		choice = ntohl(net_choice);
 		switch (choice){
 			case 1:
@@ -211,12 +210,12 @@ void *clientThread(void *arg){
 				}
 				
 				net_answer = answer;
-				handleSendReturn(safeSend(c_sock, &net_answer, sizeof(net_answer), 0), &c_sock);
+				handleSendReturn(safeSend(c_sock, &net_answer, sizeof(net_answer), 0));
 				if (answer){
 					// CLIENT AUTORIZZATO
 					char buffer[BUF_SIZE];
 					
-					handleRecvReturn(safeRecv(c_sock, buffer, BUF_SIZE, 0), &c_sock);
+					handleRecvReturn(safeRecv(c_sock, buffer, BUF_SIZE, 0));
 					Contact *contatto = createContact(buffer);
 					if (contatto == NULL){
 						perror("malloc contact");
@@ -231,10 +230,10 @@ void *clientThread(void *arg){
 					pthread_mutex_unlock(&r_mutex);
 					
 					if (res == 0){
-						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0), &c_sock);
+						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0));
 					} else {
 						strcpy(buffer, "Errore\n");
-						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0), &c_sock);
+						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0));
 					}
 					
 					free(contatto);
@@ -248,12 +247,12 @@ void *clientThread(void *arg){
 				}
 				
 				net_answer = answer;
-				handleSendReturn(safeSend(c_sock, &net_answer, sizeof(net_answer), 0), &c_sock);
+				handleSendReturn(safeSend(c_sock, &net_answer, sizeof(net_answer), 0));
 				if (answer){
 					// CLIENT AUTORIZZATO
 					char buffer[BUF_SIZE];
 					
-					handleRecvReturn(safeRecv(c_sock, buffer, BUF_SIZE, 0), &c_sock);
+					handleRecvReturn(safeRecv(c_sock, buffer, BUF_SIZE, 0));
 					Contact *contatto = createContact(buffer);
 					if (contatto == NULL){
 						perror("malloc contatto");
@@ -264,10 +263,10 @@ void *clientThread(void *arg){
 					res = searchContact(contatto, buffer);
 					
 					if (res == 0){
-						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0), &c_sock);
+						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0));
 					} else {
 						strcpy(buffer, "Errore\n");
-						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0), &c_sock);
+						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0));
 					}
 					
 					free(contatto);
@@ -337,43 +336,37 @@ int parseCmdLine(int argc, char *argv[], char **sPort) {
 		}
 	}
 	
-	if (*sPort == NULL){
-		puts("porta mancante");
-		exit(EXIT_FAILURE);
-	}
+  if (!*sPort){
+      puts("Errore: -p è obbligatorio");
+      exit(EXIT_FAILURE);
+  }
 	
 	return 0;
 }
 
-void handleSendReturn(ssize_t ret, int *sock){
+void handleSendReturn(ssize_t ret){
 	if (ret == -3) {
 		puts("Connessione chiusa dal client");
-		close(*sock);
 		pthread_exit(NULL);
 	} else if (ret == -2){
 		puts("Tempo scaduto");
-		close(*sock);
 		pthread_exit(NULL);
 	} else if (ret == -1) {
 		perror("send");
-		close(*sock);
 		pthread_exit(NULL);
 	}
 }
 
-void handleRecvReturn(ssize_t ret, int *sock){
+void handleRecvReturn(ssize_t ret){
     if (ret == -3 || ret == 0) {
       puts("Connessione chiusa dal client");
-      close(*sock);
       pthread_exit(NULL);
     } else if (ret == -2){
     	puts("Tempo scaduto");
-    	close(*sock);
     	pthread_exit(NULL);
     }
     else if (ret == -1) {
     	perror("recv");
- 	    close(*sock);
       pthread_exit(NULL);
     }
 }
