@@ -13,7 +13,6 @@
 
 ssize_t safeRecv(int sfd, void *buffer, size_t size, int flags);
 ssize_t safeSend(int sfd, const void *buffer, size_t size, int flags);
-ssize_t safeRead(int fd, void *buffer, size_t size);
 ssize_t safeWrite(int fd, const void *buffer, size_t size);
 ssize_t readLine(int fd, char *line, size_t size);
 int safeWait(sem_t *sem);
