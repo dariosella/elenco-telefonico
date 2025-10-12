@@ -11,6 +11,7 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <errno.h>
+#include <semaphore.h>
 
 #include "helper.h"
 #include "user.h"
@@ -19,14 +20,24 @@
 // SOCKET DI ASCOLTO
 int l_sock = -1;
 
-// MUTEX
-pthread_mutex_t r_mutex; // protezione scrittura su rubrica
+typedef struct {
+	sem_t turnstile; // 1 aperto, 0 chiuso (c'è un writer in attesa)
+	sem_t roomEmpty; // 1 vuoto, 0 occupato
+	sem_t mutex;
+	int readers;
+} rwsem_t;
+
+rwsem_t rw;
+
 pthread_mutex_t u_mutex; // protezione scrittura su utenti
 
 // SEGNALI
 void interruptHandler(int sig){
 	if (l_sock >= 0)
 		close(l_sock);
+	sem_destroy(&rw.turnstile);
+	sem_destroy(&rw.roomEmpty);
+	sem_destroy(&rw.mutex);
 	_exit(EXIT_SUCCESS);
 }
 
@@ -42,8 +53,20 @@ int main(int argc, char *argv[]){
 	// SOCKET DI CONNESSIONE
 	int conn_sock = -1;
 	
-	// INIZIALIZZAZIONE MUTEX
-	pthread_mutex_init(&r_mutex, NULL);
+	// INIZIALIZZAZIONE SEMAFORI
+	if (sem_init(&rw.turnstile, 0, 1) == -1) {
+		perror("sem_init turnstile");
+		exit(EXIT_FAILURE);
+	}
+	if (sem_init(&rw.roomEmpty, 0, 1) == -1) {
+		perror("sem_init roomEmpty");
+		exit(EXIT_FAILURE);
+	}
+	if (sem_init(&rw.mutex, 0, 1) == -1) {
+		perror("sem_init mutex");
+		exit(EXIT_FAILURE);
+	}
+	rw.readers = 0;
 	pthread_mutex_init(&u_mutex, NULL);
 	
 	// SEGNALI
@@ -225,10 +248,14 @@ void *clientThread(void *arg){
 					
 					memset(buffer, 0, BUF_SIZE);
 					
-					// SEZIONE CRITICA
-					pthread_mutex_lock(&r_mutex);
+					// WRITER
+					sem_wait(&rw.turnstile); // impedisci a nuovi lettori di entrare
+					sem_wait(&rw.roomEmpty); // aspetta che la stanza sia vuota
+					
 					res = addContact(contatto, buffer);
-					pthread_mutex_unlock(&r_mutex);
+					
+					sem_post(&rw.roomEmpty); // libera la stanza
+					sem_post(&rw.turnstile); // riapri il tornello
 					
 					if (res == 0){
 						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0));
@@ -261,7 +288,29 @@ void *clientThread(void *arg){
 					}
 					
 					memset(buffer, 0, BUF_SIZE);
+					
+					// READER ENTER
+					sem_wait(&rw.turnstile);   // se c'è uno scrittore in attesa, aspetta
+					sem_post(&rw.turnstile);   // passa subito se nessuno scrittore ha chiuso il tornello
+					sem_wait(&rw.mutex);
+					rw.readers++;
+					if (rw.readers == 1){
+						// primo lettore blocca la stanza agli scrittori
+						sem_wait(&rw.roomEmpty);
+					}
+					sem_post(&rw.mutex);
+					
+					// LETTURA
 					res = searchContact(contatto, buffer);
+					
+					// READER EXIT
+					sem_wait(&rw.mutex);
+					rw.readers--;
+					if (rw.readers == 0){
+						// ultimo lettore libera la stanza
+						sem_post(&rw.roomEmpty);
+					}
+					sem_post(&rw.mutex);
 					
 					if (res == 0){
 						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0));

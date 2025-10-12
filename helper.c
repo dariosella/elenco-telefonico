@@ -35,7 +35,7 @@ ssize_t safeSend(int sfd, const void *buffer, size_t size, int flags){
 	const char *ptr = buffer;
 	
 	while (total < size){
-		ssize_t r = send(sfd, ptr + total, size - total, flags);
+		ssize_t r = send(sfd, ptr + total, size - total, flags | MSG_NOSIGNAL);
 		if (r == -1){
 			if (errno == EINTR){
 				continue; // riprova
