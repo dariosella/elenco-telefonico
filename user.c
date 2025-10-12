@@ -53,8 +53,8 @@ int usrLogin(User *utente){
 	return -3; // utente non esiste
 }
 
-int usrRegister(User *utente, char *perm){
-	if (utente == NULL || perm == NULL){
+int usrRegister(User *utente){
+	if (utente == NULL){
 		puts("usrRegister args NULL");
 		return -1;
 	}
@@ -115,7 +115,7 @@ int usrRegister(User *utente, char *perm){
 	
 	// scrittura "username permission\n" sul file permessi
 	memset(buffer, 0, BUF_SIZE);
-	snprintf(buffer, BUF_SIZE, "%s %s\n", utente->usr, perm);
+	snprintf(buffer, BUF_SIZE, "%s %s\n", utente->usr, utente->prm);
 	if (safeWrite(fd2, buffer, strlen(buffer)) == -1){
 		perror("write permessi");
 		close(fd);

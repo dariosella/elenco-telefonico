@@ -155,6 +155,7 @@ void *clientThread(void *arg){
 	}
 	c_user->usr[0] = '\0';
 	c_user->pwd[0] = '\0';
+	c_user->prm[0] = '\0';
 	
 	pthread_cleanup_push((void(*)(void*))free,  c_user);
 	pthread_cleanup_push((void(*)(void*))close, (void*)(intptr_t)c_sock);
@@ -169,11 +170,11 @@ void *clientThread(void *arg){
 				// RICEVO USERNAME, PASSWORD, PERMESSO DAL CLIENT
 				handleRecvReturn(safeRecv(c_sock, c_user->usr, USR_SIZE, 0));
 				handleRecvReturn(safeRecv(c_sock, c_user->pwd, PWD_SIZE, 0));
-				handleRecvReturn(safeRecv(c_sock, perm, PERM_SIZE, 0));
+				handleRecvReturn(safeRecv(c_sock, c_user->prm, PERM_SIZE, 0));
 				
 				// SEZIONE CRITICA
 				pthread_mutex_lock(&u_mutex);
-				res = usrRegister(c_user, perm);
+				res = usrRegister(c_user);
 				pthread_mutex_unlock(&u_mutex);
 				
 				net_res = htonl(res);
@@ -287,7 +288,7 @@ void *clientThread(void *arg){
 void signalSetup(){
 	struct sigaction sa;
 	
-	// SIGINT
+	// SIGINT, SIGTERM
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = interruptHandler;
 	sigemptyset(&sa.sa_mask);
@@ -296,14 +297,12 @@ void signalSetup(){
 		perror("sigaction SIGINT");
 		exit(EXIT_FAILURE);
 	}
-	
-	// SIGTERM
 	if (sigaction(SIGTERM, &sa, NULL) == -1){
 		perror("sigaction SIGTERM");
 		exit(EXIT_FAILURE);
 	}
 	
-	// SIGPIPE
+	// SIGPIPE, SIGHUP
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = SIG_IGN;
 	sigemptyset(&sa.sa_mask);
@@ -312,8 +311,6 @@ void signalSetup(){
 		perror("sigaction SIGPIPE");
 		exit(EXIT_FAILURE);
 	}
-	
-	// SIGHUP
 	if (sigaction(SIGHUP, &sa, NULL) == -1){
 		perror("sigaction SIGHUP");
 		exit(EXIT_FAILURE);
@@ -358,7 +355,7 @@ void handleSendReturn(ssize_t ret){
 }
 
 void handleRecvReturn(ssize_t ret){
-    if (ret == -3 || ret == 0) {
+    if (ret == -3) {
       puts("Connessione chiusa dal client");
       pthread_exit(NULL);
     } else if (ret == -2){

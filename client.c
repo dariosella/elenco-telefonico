@@ -165,12 +165,12 @@ int main(int argc, char *argv[]){
 			  handleRecvReturn(safeRecv(c_sock, &net_res, sizeof(net_res), 0));
 				res = ntohl(net_res);
 				switch (res){
-					case 1:
-						printf("%s già utilizzato\n", username);
-						fflush(stdout);
-						break;
 					case -1:
 						puts("Errore");
+						break;
+					case -2:
+						printf("%s già utilizzato\n", username);
+						fflush(stdout);
 						break;
 				}
 				break;
@@ -199,15 +199,15 @@ int main(int argc, char *argv[]){
 				handleRecvReturn(safeRecv(c_sock, &net_res, sizeof(net_res), 0));
 				res = ntohl(net_res);
 				switch (res){
-					case 1:
-						puts("Password sbagliata");
-						break;
-					case 2:
-						printf("%s Non esiste\n", username);
-						fflush(stdout);
-						break;
 					case -1:
 						puts("Errore");
+						break;
+					case -2:
+						puts("Password sbagliata");
+						break;
+					case -3:
+						printf("%s Non esiste\n", username);
+						fflush(stdout);
 						break;
 				}
 				break;
@@ -327,7 +327,10 @@ void signalSetup(){
   sa.sa_handler = alarmHandler;
   sigemptyset(&sa.sa_mask);
   sa.sa_flags = 0;
-  if (sigaction(SIGALRM, &sa, NULL) == -1) { perror("sigaction SIGALRM"); exit(EXIT_FAILURE); }
+  if (sigaction(SIGALRM, &sa, NULL) == -1) {
+  	perror("sigaction SIGALRM");
+  	exit(EXIT_FAILURE);
+  }
 	
   // SIGINT, SIGTERM, SIGHUP, SIGQUIT
   memset(&sa, 0, sizeof(sa));
@@ -462,7 +465,7 @@ void flushInput(unsigned int seconds){
 		} 
     else if (r == -1) {
     	if (errno == EINTR && !timeout_expired)
-				continue;
+				continue; // riprova
       break; // errore o timeout
     }
 	}

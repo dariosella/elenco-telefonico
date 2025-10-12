@@ -52,26 +52,6 @@ ssize_t safeSend(int sfd, const void *buffer, size_t size, int flags){
 	return total;
 }
 
-ssize_t safeRead(int fd, void *buffer, size_t size){
-	ssize_t total = 0;
-	char *ptr = buffer;
-	
-	while (total < size){
-		ssize_t r = read(fd, ptr + total, size - total);
-		if (r == -1){
-			if (errno == EINTR){
-				continue; // riprova
-			} else {
-				return -1; // errore
-			}
-		} else if (r == 0){
-			break; // EOF
-		}
-		total += r;
-	}
-	return total;
-}
-
 ssize_t safeWrite(int fd, const void *buffer, size_t size){
 	ssize_t total = 0;
 	const char *ptr = buffer;
@@ -92,25 +72,30 @@ ssize_t safeWrite(int fd, const void *buffer, size_t size){
 
 ssize_t readLine(int fd, char *line, size_t size) {
     size_t i = 0;
-    ssize_t r;
+    ssize_t r = 0;
     char c;
 
     while (i < size - 1) {
-        r = safeRead(fd, &c, 1);
+        r = read(fd, &c, 1);
         if (r == 1) {
             line[i++] = c;
             if (c == '\n') {
                 line[i] = '\0';
                 return i; // OK
             }
+        
         } else if (r == 0) {
-            // EOF
-            line[i] = '\0';
-            return i;
-        } else {
-            perror("read");
-            return -1;
-        }
+		      	// EOF
+		        line[i] = '\0';
+		        return i;
+        } else if (r == -1){
+						if (errno == EINTR){
+							continue; // riprova
+						} else {
+							perror("read");
+							return -1; // errore
+						} 
+				}
     }
     
     line[size - 1] = '\0';
