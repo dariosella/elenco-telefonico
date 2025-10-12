@@ -163,8 +163,8 @@ Wrapper in `helper.c`:
   - legge fino a `\n`/EOF
   - `-2` se overflow della linea, `-1` errore
 
-- `ssize_t safeRead/safeWrite(...)`
-  - robusti a `EINTR`, scrivono/leggono esattamente `size` o errore
+- `ssize_t safeWrite(...)`
+  - robusta a `EINTR`, scrive esattamente `size` o errore
 
 Le funzioni `handleSendReturn/handleRecvReturn` (client e server) **centralizzano la gestione degli esiti**: in caso di `-1/-2/-3` stampano, chiudono dove serve e **terminano** il thread/processo.
 
