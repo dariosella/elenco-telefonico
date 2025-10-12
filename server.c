@@ -35,6 +35,9 @@ pthread_mutex_t u_mutex; // protezione scrittura su utenti
 void interruptHandler(int sig){
 	if (l_sock >= 0)
 		close(l_sock);
+	sem_destroy(&rw.turnstile);
+	sem_destroy(&rw.roomEmpty);
+	sem_destroy(&rw.mutex);
 	_exit(EXIT_SUCCESS);
 }
 
@@ -194,8 +197,9 @@ void *clientThread(void *arg){
 				
 				// SEZIONE CRITICA
 				pthread_mutex_lock(&u_mutex);
+				pthread_cleanup_push((void(*)(void*))pthread_mutex_unlock, &u_mutex);
 				res = usrRegister(c_user);
-				pthread_mutex_unlock(&u_mutex);
+				pthread_cleanup_pop(1); // pthread_mutex_unlock(&u_mutex);
 				
 				net_res = htonl(res);
 				handleSendReturn(safeSend(c_sock, &net_res, sizeof(net_res), 0));
@@ -235,6 +239,7 @@ void *clientThread(void *arg){
 				if (answer){
 					// CLIENT AUTORIZZATO
 					char buffer[BUF_SIZE];
+					memset(buffer, 0, BUF_SIZE);
 					
 					handleRecvReturn(safeRecv(c_sock, buffer, BUF_SIZE, 0));
 					Contact *contatto = createContact(buffer);
@@ -246,13 +251,15 @@ void *clientThread(void *arg){
 					memset(buffer, 0, BUF_SIZE);
 					
 					// WRITER
-					sem_wait(&rw.turnstile); // impedisci a nuovi lettori di entrare
-					sem_wait(&rw.roomEmpty); // aspetta che la stanza sia vuota
+					if (safeWait(&rw.turnstile) == -1) pthread_exit(NULL); // impedisci a nuovi lettori di entrare
+					pthread_cleanup_push((void(*)(void*)) sem_post, &rw.turnstile);
+					if (safeWait(&rw.roomEmpty) == -1) pthread_exit(NULL); // aspetta che la stanza sia vuota
+					pthread_cleanup_push((void(*)(void*)) sem_post, &rw.roomEmpty);
 					
 					res = addContact(contatto, buffer);
 					
-					sem_post(&rw.roomEmpty); // libera la stanza
-					sem_post(&rw.turnstile); // riapri il tornello
+					pthread_cleanup_pop(1); // sem_post(&rw.roomEmpty); libera la stanza
+					pthread_cleanup_pop(1); // sem_post(&rw.turnstile); riapri il tornello
 					
 					if (res == 0){
 						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0));
@@ -275,39 +282,50 @@ void *clientThread(void *arg){
 				handleSendReturn(safeSend(c_sock, &net_answer, sizeof(net_answer), 0));
 				if (answer){
 					// CLIENT AUTORIZZATO
-					char buffer[BUF_SIZE];
+					char nome[NAME_SIZE];
 					
-					handleRecvReturn(safeRecv(c_sock, buffer, BUF_SIZE, 0));
-					Contact *contatto = createContact(buffer);
+					handleRecvReturn(safeRecv(c_sock, nome, NAME_SIZE, 0));
+					Contact *contatto = createContact(nome);
 					if (contatto == NULL){
 						perror("malloc contatto");
 						pthread_exit(NULL);
 					}
 					
+					char buffer[BUF_SIZE];
 					memset(buffer, 0, BUF_SIZE);
 					
 					// READER ENTER
-					sem_wait(&rw.turnstile);   // se c'è uno scrittore in attesa, aspetta
-					sem_post(&rw.turnstile);   // passa subito se nessuno scrittore ha chiuso il tornello
-					sem_wait(&rw.mutex);
+					// se c'è uno scrittore, aspetta
+					if (safeWait(&rw.turnstile) == -1) pthread_exit(NULL);
+					// passa subito se nessuno scrittore ha chiuso il tornello
+					if (sem_post(&rw.turnstile) == -1){ perror("sem_post"); pthread_exit(NULL); }
+					
+					if (safeWait(&rw.mutex) == -1) pthread_exit(NULL);
 					rw.readers++;
 					if (rw.readers == 1){
 						// primo lettore blocca la stanza agli scrittori
-						sem_wait(&rw.roomEmpty);
+						if (safeWait(&rw.roomEmpty) == -1){
+							if (sem_post(&rw.mutex) == -1) perror("sem_post mutex");
+							pthread_exit(NULL);
+						}
 					}
-					sem_post(&rw.mutex);
+					if (sem_post(&rw.mutex) == -1) { perror("sem_post mutex"); pthread_exit(NULL); }
 					
 					// LETTURA
 					res = searchContact(contatto, buffer);
 					
 					// READER EXIT
-					sem_wait(&rw.mutex);
+					if (safeWait(&rw.mutex) == -1) pthread_exit(NULL);
 					rw.readers--;
 					if (rw.readers == 0){
 						// ultimo lettore libera la stanza
-						sem_post(&rw.roomEmpty);
+						if (sem_post(&rw.roomEmpty) == -1) { 
+							perror("sem_post roomEmpty"); 
+							if (sem_post(&rw.mutex) == -1) perror("sem_post mutex");
+							pthread_exit(NULL);
+						}
 					}
-					sem_post(&rw.mutex);
+					if (sem_post(&rw.mutex) == -1) { perror("sem_post mutex"); pthread_exit(NULL); }
 					
 					if (res == 0){
 						handleSendReturn(safeSend(c_sock, buffer, BUF_SIZE, 0));
@@ -339,28 +357,16 @@ void signalSetup(){
 	sa.sa_handler = interruptHandler;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
-	if (sigaction(SIGINT, &sa, NULL) == -1){
-		perror("sigaction SIGINT");
-		exit(EXIT_FAILURE);
-	}
-	if (sigaction(SIGTERM, &sa, NULL) == -1){
-		perror("sigaction SIGTERM");
-		exit(EXIT_FAILURE);
-	}
+	if (sigaction(SIGINT, &sa, NULL) == -1){ perror("sigaction SIGINT"); exit(EXIT_FAILURE); }
+	if (sigaction(SIGTERM, &sa, NULL) == -1){ perror("sigaction SIGTERM"); exit(EXIT_FAILURE); }
 	
 	// SIGPIPE, SIGHUP
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = SIG_IGN;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
-	if (sigaction(SIGPIPE, &sa, NULL) == -1){
-		perror("sigaction SIGPIPE");
-		exit(EXIT_FAILURE);
-	}
-	if (sigaction(SIGHUP, &sa, NULL) == -1){
-		perror("sigaction SIGHUP");
-		exit(EXIT_FAILURE);
-	}
+	if (sigaction(SIGPIPE, &sa, NULL) == -1){ perror("sigaction SIGPIPE"); exit(EXIT_FAILURE); }
+	if (sigaction(SIGHUP, &sa, NULL) == -1){ perror("sigaction SIGHUP"); exit(EXIT_FAILURE); }
 	
 }
 
@@ -379,38 +385,24 @@ int parseCmdLine(int argc, char *argv[], char **sPort) {
 		}
 	}
 	
-  if (!*sPort){
-      puts("Errore: -p è obbligatorio");
-      exit(EXIT_FAILURE);
-  }
+  if (!*sPort){ puts("Errore: -p è obbligatorio"); exit(EXIT_FAILURE); }
 	
 	return 0;
 }
 
 void handleSendReturn(ssize_t ret){
-	if (ret == -3) {
-		puts("Connessione chiusa dal client");
-		pthread_exit(NULL);
-	} else if (ret == -2){
-		puts("Tempo scaduto");
-		pthread_exit(NULL);
-	} else if (ret == -1) {
-		perror("send");
-		pthread_exit(NULL);
-	}
+	if (ret == -3){ puts("Connessione chiusa dal client"); pthread_exit(NULL); }
+	else if (ret == -2){ puts("Tempo scaduto"); pthread_exit(NULL); }
+	else if (ret == -1){ perror("send"); pthread_exit(NULL);}
 }
 
 void handleRecvReturn(ssize_t ret){
-    if (ret == -3) {
-      puts("Connessione chiusa dal client");
-      pthread_exit(NULL);
-    } else if (ret == -2){
-    	puts("Tempo scaduto");
-    	pthread_exit(NULL);
-    }
-    else if (ret == -1) {
-    	perror("recv");
-      pthread_exit(NULL);
-    }
+    if (ret == -3){ puts("Connessione chiusa dal client"); pthread_exit(NULL); }
+    else if (ret == -2){ puts("Tempo scaduto"); pthread_exit(NULL); }
+    else if (ret == -1){ perror("recv"); pthread_exit(NULL); }
 }
+
+
+
+
 

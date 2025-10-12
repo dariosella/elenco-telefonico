@@ -282,17 +282,17 @@ int main(int argc, char *argv[]){
 				
 				if (answer){
 					// CLIENT AUTORIZZATO
-					char nome[BUF_SIZE];
-					memset(nome, 0, BUF_SIZE);
+					char nome[NAME_SIZE];
+					memset(nome, 0, NAME_SIZE);
 					
 					// INPUT CONTATTO
 					printf("%s\n", "Inserisci 'Nome [Nomi secondari] Cognome'");
 					fflush(stdout);
-					handleInputReturn(safeInputAlarm(0, nome, BUF_SIZE));
+					handleInputReturn(safeInputAlarm(0, nome, NAME_SIZE));
 					handleNewline(nome);
 					
 					// INVIO CONTATTO AL SERVER
-					handleSendReturn(safeSend(c_sock, nome, BUF_SIZE, 0));
+					handleSendReturn(safeSend(c_sock, nome, NAME_SIZE, 0));
 					
 					char risposta[BUF_SIZE];
 					memset(risposta, 0, BUF_SIZE);

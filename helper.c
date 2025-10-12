@@ -102,3 +102,21 @@ ssize_t readLine(int fd, char *line, size_t size) {
     return -2; // linea troppo lunga
 }
 
+int safeWait(sem_t *sem) {
+    int ret = 0;
+    while ((ret = sem_wait(sem)) == -1 && errno == EINTR) {
+        continue; // riprova
+    }
+    if (ret == -1) {
+        perror("sem_wait");
+        return -1; // errore
+    }
+    return 0;
+}
+
+
+
+
+
+
+
