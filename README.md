@@ -4,6 +4,6 @@ Applicazione client–server in C per un elenco telefonico con autenticazione, p
 
 ---
 
-Leggere Relazione.pdf
+Leggere **Relazione.pdf**
 
 ---
