@@ -55,7 +55,7 @@ ad utenti autorizzati).
 Il server utilizza 3 file di testo:
 
 - `utenti` — l’elenco di ogni utente registrato, ogni riga: **“Username Password\n”**
-- `permessi` — l’elenco dei permessi per ogni utente registrato, ogni riga: **“Username permesso\n”** con **permesso** $∈ \{ r, w, rw \}$
+- `permessi` — l’elenco dei permessi per ogni utente registrato, ogni riga: **“Username permesso\n”** con **permesso** ∈ \{ r, w, rw \}
 - `rubrica` — l’elenco telefonico, ogni riga: **"Nome [Nomi secondari] Cognome Numero\n"**
 
 Permessi file: `0600`.
