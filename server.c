@@ -35,9 +35,6 @@ pthread_mutex_t u_mutex; // protezione scrittura su utenti
 void interruptHandler(int sig){
 	if (l_sock >= 0)
 		close(l_sock);
-	sem_destroy(&rw.turnstile);
-	sem_destroy(&rw.roomEmpty);
-	sem_destroy(&rw.mutex);
 	_exit(EXIT_SUCCESS);
 }
 
